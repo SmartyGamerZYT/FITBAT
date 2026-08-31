@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FITBAT - Fitness Battles & AI Health Arena</title>
+    <!-- Casual & Friendly Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Poppins:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- MediaPipe Pose & Camera Utilities -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <!-- Light & Casual Style -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+    <!-- Confetti Particle Layer -->
+    <div id="confetti-container"></div>
+
+    <!-- App Header -->
+    <header class="app-header">
+        <div class="logo-wrap" onclick="window.app.showView('dashboard')">
+            <span class="logo-icon">⚡</span>
+            <span class="logo-text">FITBAT</span>
+            <span class="logo-tag">ARENA</span>
+        </div>
+
+        <nav class="nav-menu">
+            <button class="nav-link active" data-nav="dashboard" id="nav-dashboard">📊 Dashboard</button>
+            <button class="nav-link" data-nav="battle_select" id="nav-battle_select">⚔️ Battle Ground</button>
+            <button class="nav-link" data-nav="tasks" id="nav-tasks">🎯 Daily Quests</button>
+            <button class="nav-link" data-nav="activity" id="nav-activity">👟 Step Monitor</button>
+            <button class="nav-link" data-nav="leaderboard" id="nav-leaderboard">🏆 Leaderboards</button>
+        </nav>
+
+        <div class="user-badge-wrap hidden" id="header-user-badge">
+            <span class="badge-item" id="header-username">Warrior</span>
+            <span class="badge-item badge-xp" id="header-points">0 XP</span>
+            <span class="badge-item badge-coin" id="header-coins">0 🪙</span>
+            <span class="badge-item badge-streak" id="header-streak">🔥 1d</span>
+            <button class="btn-logout" onclick="window.app.logout()" title="Logout">🚪 Logout</button>
+        </div>
+    </header>
+
+    <!-- Main Views Container -->
+    <main class="main-container">
+
+        <!-- VIEW 1: DASHBOARD -->
+        <section id="view-dashboard" class="app-view active">
+            <div class="glass-card hero-metric-card">
+                <div>
+                    <h1 id="dash-user-greeting" style="font-family: var(--font-heading); font-size: 1.8rem; margin-bottom: 0.4rem; color: var(--text-primary);">Welcome! 👋</h1>
+                    <p style="color: var(--text-secondary); max-width: 600px; line-height: 1.5;">
+                        Your fitness statistics and personalized AI training blueprint are ready. Choose a battle mode or complete daily camera quests to level up!
+                    </p>
+                    <div style="margin-top: 1.2rem; display: flex; gap: 0.8rem; flex-wrap: wrap;">
+                        <button class="btn-primary btn-battle" data-nav="battle_select">Enter Battle Arena ⚔️</button>
+                        <button class="btn-secondary" onclick="window.chatbotWidget.toggle()">Ask AI Coach 🤖</button>
+                    </div>
+                </div>
+                <div class="fitness-score-circle">
+                    <span class="stat-label" style="font-size: 0.7rem;">FITNESS SCORE</span>
+                    <span class="score-num" id="dash-fitness-score">85</span>
+                    <span style="font-size: 0.72rem; color: var(--blue); font-weight: 700;">OUT OF 100</span>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- BMI Card -->
+                <div class="glass-card">
+                    <div class="metric-stat-item">
+                        <span class="stat-label">Body Mass Index (BMI)</span>
+                        <div style="display: flex; align-items: baseline; gap: 0.6rem;">
+                            <span class="stat-value" id="dash-bmi">22.4</span>
+                            <span class="ex-category-badge" id="dash-bmi-cat">Optimal</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
+                        BMR: <strong id="dash-bmr" style="color: var(--text-primary);">1650 kcal</strong> | TDEE: <strong id="dash-tdee" style="color: var(--text-primary);">2350 kcal</strong>
+                    </div>
+                </div>
+
+                <!-- Body Fat & Calories -->
+                <div class="glass-card">
+                    <div class="metric-stat-item">
+                        <span class="stat-label">Body Fat % (Est.)</span>
+                        <span class="stat-value" id="dash-bodyfat" style="color: var(--coral);">16.5%</span>
+                    </div>
+                    <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);">
+                        Target Daily Intake: <strong id="dash-calorie-target" style="color: var(--blue);">2,100 kcal</strong>
+                    </div>
+                </div>
+
+                <!-- Age Category & Badge -->
+                <div class="glass-card">
+                    <div class="metric-stat-item">
+                        <span class="stat-label">Age Group Division</span>
+                        <span class="stat-value" id="dash-age-bracket" style="font-size: 1.3rem; color: var(--purple);">Prime (20-29)</span>
+                    </div>
+                    <div style="margin-top: 0.5rem; font-size: 0.95rem; font-weight: 800; color: var(--blue);" id="dash-age-badge">
+                        ⚡ Peak Titan
+                    </div>
+                </div>
+
+                <!-- AI Prescription & Guidance -->
+                <div class="glass-card" style="grid-column: 1 / -1;">
+                    <h3 style="font-family: var(--font-heading); color: var(--text-primary); margin-bottom: 0.6rem;">🎯 AI Personalized Recommendations</h3>
+                    <p id="dash-age-advice" style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5; margin-bottom: 1.2rem;">
+                        Focus on progressive overload in your daily exercises, maintain steady hydration, and balance high-intensity battles with recovery.
+                    </p>
+                    <div style="display: flex; gap: 2rem; flex-wrap: wrap; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                        <div>
+                            <span class="stat-label">Target Protein</span>
+                            <div style="font-weight: 800; font-size: 1.2rem; color: var(--emerald);" id="dash-macro-protein">145g</div>
+                        </div>
+                        <div>
+                            <span class="stat-label">Target Carbs</span>
+                            <div style="font-weight: 800; font-size: 1.2rem; color: var(--blue);" id="dash-macro-carbs">220g</div>
+                        </div>
+                        <div>
+                            <span class="stat-label">Target Fats</span>
+                            <div style="font-weight: 800; font-size: 1.2rem; color: var(--amber);" id="dash-macro-fats">60g</div>
+                        </div>
+                        <div>
+                            <span class="stat-label">Daily Hydration</span>
+                            <div style="font-weight: 800; font-size: 1.2rem; color: #0284c7;" id="dash-water-target">3.2 L / day</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW 2: BATTLE SELECT -->
+        <section id="view-battle_select" class="app-view">
+            <div style="margin-bottom: 1.5rem;">
+                <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">⚔️ The Battle Ground</h1>
+                <p style="color: var(--text-secondary);">Challenge matched peers, battle your friends with live camera, or duel smart AI rivals.</p>
+            </div>
+
+            <!-- Friend Room Direct Battle Box -->
+            <div class="friend-room-box">
+                <div>
+                    <h3 style="font-size: 1.1rem; color: var(--blue); margin-bottom: 0.2rem;">👥 Battle a Friend with Live Camera!</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.88rem;">Create a private battle code or join your friend's room.</p>
+                </div>
+                <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                    <button class="btn-primary" onclick="window.app.createFriendRoom()">+ Create Room Code</button>
+                    <span style="color: var(--text-muted); font-weight: 700;">OR</span>
+                    <input type="text" id="friend-room-code-input" placeholder="e.g. BAT-450" style="padding: 0.65rem 0.9rem; border: 1px solid var(--border-color); border-radius: 10px; width: 140px; font-weight: 800; text-transform: uppercase;">
+                    <button class="btn-secondary" onclick="window.app.joinFriendRoom()">Join Friend Room</button>
+                </div>
+            </div>
+
+            <div class="glass-card" style="margin-bottom: 1.5rem;">
+                <h4 style="color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.5px;">Step 1: Select Age Division</h4>
+                <div class="age-selector-bar" id="age-group-pills"></div>
+            </div>
+
+            <h4 style="color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 0.8rem;">Step 2: Choose Exercise (12 Disciplines)</h4>
+            <div class="exercises-grid" id="exercises-grid-container"></div>
+
+            <div style="display: flex; justify-content: center; gap: 1.2rem; margin-top: 1.8rem; flex-wrap: wrap;">
+                <button class="btn-primary btn-battle" onclick="window.app.startBattleSession(false)">Matchmaking Battle (PvP / AI) ⚔️</button>
+                <button class="btn-secondary" onclick="window.app.startBattleSession(true)">Practice vs AI Rival 🤖</button>
+            </div>
+        </section>
+
+        <!-- VIEW 3: REAL-TIME BATTLE ARENA -->
+        <section id="view-battle_arena" class="app-view">
+            <div class="battle-arena-wrapper" id="battle-arena-container">
+                <!-- Top Status HUD -->
+                <div class="battle-top-bar">
+                    <div>
+                        <span class="stat-label">DISCIPLINE</span>
+                        <div style="font-family: var(--font-heading); font-size: 1.3rem; font-weight: 800; color: var(--blue);" id="battle-exercise-display">PUSHUPS</div>
+                        <span class="stat-label" id="battle-age-display" style="font-size: 0.78rem; color: var(--purple);">Prime (20-29)</span>
+                    </div>
+
+                    <div class="timer-box" id="battle-timer">45</div>
+
+                    <div style="text-align: right;">
+                        <button class="btn-secondary" style="padding: 0.4rem 0.9rem; font-size: 0.85rem; color: var(--coral);" onclick="window.battleArena.exitBattle()">Surrender / Exit</button>
+                    </div>
+                </div>
+
+                <!-- Split Camera Screen: Left (You) / Right (Friend or AI Opponent) -->
+                <div class="split-battle-screen">
+                    <!-- Left: Player Camera -->
+                    <div class="fighter-viewport">
+                        <div class="fighter-hud">
+                            <div>
+                                <strong style="color: var(--emerald);">YOU</strong>
+                                <div class="power-bar-wrap"><div class="power-bar-fill" id="player-power-bar" style="width: 0%;"></div></div>
+                            </div>
+                            <div style="text-align: right;">
+                                <span class="rep-display-huge" id="player-rep-count">0</span>
+                                <div style="font-size: 0.78rem; color: var(--amber); font-weight: 800;" id="player-combo-count">x0</div>
+                            </div>
+                        </div>
+
+                        <video id="battle-user-video" playsinline muted autoplay></video>
+                        <canvas id="battle-user-canvas"></canvas>
+
+                        <div class="combat-effects-container" id="player-combat-effects"></div>
+                        <div class="form-feedback-banner" id="battle-form-feedback">Ready to Battle!</div>
+                    </div>
+
+                    <!-- Right: Opponent (Live Peer Video OR AI Avatar) -->
+                    <div class="fighter-viewport">
+                        <div class="fighter-hud">
+                            <div>
+                                <strong style="color: var(--coral);" id="opp-name-display">Opponent</strong>
+                                <div class="power-bar-wrap"><div class="power-bar-fill" id="opp-power-bar" style="width: 0%; background: linear-gradient(90deg, var(--coral), var(--amber));"></div></div>
+                            </div>
+                            <div style="text-align: right;">
+                                <span class="rep-display-huge" style="color: var(--coral);" id="opp-rep-count">0</span>
+                                <div style="font-size: 0.78rem; color: var(--amber); font-weight: 800;" id="opp-combo-count">x0</div>
+                            </div>
+                        </div>
+
+                        <!-- Real Friend Live Video Stream via WebRTC -->
+                        <video id="battle-opp-video" class="hidden" playsinline autoplay></video>
+
+                        <!-- AI Avatar Placeholder -->
+                        <div class="ai-fighter-card" id="battle-opp-placeholder">
+                            <div class="ai-avatar-pulse">🥊</div>
+                            <div style="font-family: var(--font-heading); margin-top: 0.8rem; color: #cbd5e1; font-size: 0.95rem; font-weight: 700;">
+                                LIVE SYNCHRONIZED OPPONENT
+                            </div>
+                        </div>
+
+                        <div class="combat-effects-container" id="opp-combat-effects"></div>
+                    </div>
+                </div>
+
+                <!-- Simulation / Manual Rep button for camera-less testing -->
+                <div style="margin-top: 1.2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                    <button class="btn-secondary" style="font-size: 0.85rem;" onclick="window.poseTracker.triggerManualRep()">
+                        ⚡ Click for Instant Rep (Manual Test)
+                    </button>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">MediaPipe Pose Tracking & WebRTC Active</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW 4: DAILY QUESTS -->
+        <section id="view-tasks" class="app-view">
+            <div style="margin-bottom: 1.5rem;">
+                <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">🎯 Daily Quests & Camera Challenges</h1>
+                <p style="color: var(--text-secondary);">Click on any exercise quest below to turn on the camera, track your form and count reps to complete it!</p>
+            </div>
+            <div class="tasks-grid" id="daily-tasks-list"></div>
+        </section>
+
+        <!-- VIEW 5: STEP & ACTIVITY MONITOR -->
+        <section id="view-activity" class="app-view">
+            <div style="margin-bottom: 1.5rem;">
+                <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">👟 Activity & Step Monitor</h1>
+                <p style="color: var(--text-secondary);">Track your daily walking mileage, active minutes, and calorie burn.</p>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="glass-card" style="text-align: center; padding: 2.5rem 1.5rem;">
+                    <div style="font-size: 3.4rem; font-family: var(--font-heading); font-weight: 900; color: var(--blue);" id="act-steps-count">0</div>
+                    <span class="stat-label">STEPS TAKEN TODAY</span>
+                    <div class="power-bar-wrap" style="height: 12px; margin: 1.5rem auto; max-width: 300px; background: #e2e8f0;">
+                        <div class="power-bar-fill" id="step-progress-bar" style="width: 0%; background: var(--blue);"></div>
+                    </div>
+                    <div id="act-step-pct" style="color: var(--text-secondary); font-size: 0.95rem; font-weight: 700;">0% of 8,000 goal</div>
+                    <div style="margin-top: 1.5rem;">
+                        <button class="btn-primary" onclick="window.app.simulateWalking(500)">+ Log 500 Steps Walk 🚶‍♂️</button>
+                    </div>
+                </div>
+
+                <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-around; gap: 1rem;">
+                    <div class="metric-stat-item">
+                        <span class="stat-label">Distance Covered</span>
+                        <span class="stat-value" id="act-distance" style="color: var(--emerald);">0.00 km</span>
+                    </div>
+                    <div class="metric-stat-item">
+                        <span class="stat-label">Calories Burned</span>
+                        <span class="stat-value" id="act-calories" style="color: var(--amber);">0 kcal</span>
+                    </div>
+                    <div class="metric-stat-item">
+                        <span class="stat-label">Active Time</span>
+                        <span class="stat-value" id="act-active-min" style="color: var(--coral);">0 min</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW 6: LEADERBOARDS -->
+        <section id="view-leaderboard" class="app-view">
+            <div style="margin-bottom: 1.5rem;">
+                <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">🏆 Arena Leaderboards</h1>
+                <p style="color: var(--text-secondary);">Check the highest scoring fitness champions globally and in each discipline.</p>
+            </div>
+
+            <div class="glass-card" style="margin-bottom: 2rem;">
+                <h3 style="font-family: var(--font-heading); color: var(--text-primary); margin-bottom: 1rem;">👑 Global Warriors Ranking</h3>
+                <div style="overflow-x: auto;">
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Warrior</th>
+                                <th>Age</th>
+                                <th>Fitness Score</th>
+                                <th>Streak</th>
+                                <th>Total XP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="global-leaderboard-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+                    <h3 style="font-family: var(--font-heading); color: var(--text-primary);">💥 Exercise-Specific Rankings</h3>
+                    <select id="exercise-leaderboard-select" style="background: #fff; border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 10px; font-weight: 700;"></select>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Warrior</th>
+                                <th>Total Wins</th>
+                                <th>Max Reps In Match</th>
+                                <th>Total Reps</th>
+                                <th>Win Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="exercise-leaderboard-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Interactive Quest Camera Modal -->
+    <div class="modal-overlay" id="quest-camera-modal">
+        <div class="quest-modal-box">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 id="quest-modal-title" style="font-family: var(--font-heading); font-size: 1.4rem; color: var(--text-primary);">Daily Quest Challenge</h2>
+                <button onclick="window.app.closeQuestModal()" style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted);">✖</button>
+            </div>
+            <p id="quest-modal-desc" style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem;">Position yourself in front of the camera and complete the required reps!</p>
+
+            <div class="quest-camera-viewport">
+                <video id="quest-video-feed" playsinline muted autoplay></video>
+                <canvas id="quest-canvas-feed"></canvas>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <strong style="color: var(--blue);" id="quest-feedback-text">Get Ready!</strong>
+                <strong style="font-size: 1.2rem; color: var(--text-primary);" id="quest-target-display">0 / 20 reps</strong>
+            </div>
+
+            <div class="task-progress-bar-wrap" style="height: 10px;">
+                <div class="task-progress-fill" id="quest-modal-progress-bar" style="width: 0%;"></div>
+            </div>
+
+            <div style="margin-top: 1.2rem; display: flex; justify-content: space-between; align-items: center;">
+                <button class="btn-secondary" style="font-size: 0.85rem;" onclick="window.poseTracker.triggerManualRep()">⚡ Instant Rep (Test)</button>
+                <button class="btn-primary" onclick="window.app.closeQuestModal()">Cancel / Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Chatbot Floating Drawer -->
+    <button class="chatbot-toggle-btn" onclick="window.chatbotWidget.toggle()" title="Open AI Fitness Coach">🤖</button>
+    <div class="chatbot-drawer" id="chatbot-drawer">
+        <div class="chat-header">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span>🤖</span>
+                <strong style="font-family: var(--font-heading); font-weight: 800;">FITBAT AI Coach</strong>
+            </div>
+            <button onclick="window.chatbotWidget.toggle()" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 1.2rem;">✖</button>
+        </div>
+        <div class="chat-messages" id="chat-messages-container"></div>
+        <div style="padding: 0.5rem 0.8rem; display: flex; gap: 0.4rem; overflow-x: auto; background: var(--bg-card-subtle);">
+            <button class="ex-category-badge" style="cursor: pointer;" onclick="window.chatbotWidget.sendMessage('How to do proper pushups?')">Pushup Form</button>
+            <button class="ex-category-badge" style="cursor: pointer;" onclick="window.chatbotWidget.sendMessage('What diet is best for fat loss?')">Fat Loss Diet</button>
+            <button class="ex-category-badge" style="cursor: pointer;" onclick="window.chatbotWidget.sendMessage('Tips to win battles?')">Battle Strategy</button>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input-field" placeholder="Ask form, diet, or training advice...">
+            <button class="btn-primary" style="padding: 0.6rem 1rem;" onclick="window.chatbotWidget.sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <!-- Battle Result Modal -->
+    <div class="modal-overlay" id="battle-result-modal">
+        <div class="modal-box" style="text-align: center;">
+            <h1 id="result-outcome-title" style="font-family: var(--font-heading); font-size: 2.8rem; margin-bottom: 0.5rem;">VICTORY</h1>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Match Completed! Here is your battle breakdown:</p>
+            
+            <div style="display: flex; justify-content: space-around; margin-bottom: 1.5rem;">
+                <div>
+                    <span class="stat-label">Your Reps</span>
+                    <div class="stat-value" id="result-user-reps" style="color: var(--emerald);">24</div>
+                </div>
+                <div>
+                    <span class="stat-label">Opponent Reps</span>
+                    <div class="stat-value" id="result-opp-reps" style="color: var(--coral);">18</div>
+                </div>
+            </div>
+
+            <div style="font-size: 1.6rem; font-weight: 800; color: var(--blue); margin-bottom: 2rem;" id="result-xp-earned">+250 XP</div>
+
+            <button class="btn-primary" style="width: 100%;" onclick="window.battleArena.exitBattle()">Return to Dashboard</button>
+        </div>
+    </div>
+
+    <!-- Authentication Modal (Login / Register) -->
+    <div class="modal-overlay" id="auth-modal">
+        <div class="modal-box">
+            <div class="auth-tabs">
+                <button class="auth-tab-btn active" id="tab-btn-login" onclick="window.app.switchAuthTab('login')">LOGIN</button>
+                <button class="auth-tab-btn" id="tab-btn-register" onclick="window.app.switchAuthTab('register')">REGISTER</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="form-login" onsubmit="window.app.handleLogin(event)">
+                <div class="form-group">
+                    <label>Username or Email</label>
+                    <input type="text" id="login-username" required placeholder="Enter username or email">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required placeholder="Enter password">
+                </div>
+                <div class="form-error" id="login-error"></div>
+                <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Enter the Arena ⚡</button>
+            </form>
+
+            <!-- Register Form with Age, Gender, Height, Weight, Activity, Goals -->
+            <form id="form-register" class="hidden" onsubmit="window.app.handleRegister(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="reg-username" required placeholder="Pick a warrior name">
+                </div>
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="reg-email" required placeholder="warrior@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-password" required placeholder="Choose a secure password">
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
+                    <div class="form-group">
+                        <label>Age (Years)</label>
+                        <input type="number" id="reg-age" required min="10" max="100" value="23">
+                    </div>
+                    <div class="form-group">
+                        <label>Gender</label>
+                        <select id="reg-gender">
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
+                    <div class="form-group">
+                        <label>Height (cm)</label>
+                        <input type="number" id="reg-height" required step="0.1" value="175">
+                    </div>
+                    <div class="form-group">
+                        <label>Weight (kg)</label>
+                        <input type="number" id="reg-weight" required step="0.1" value="70">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Current Fitness Level</label>
+                    <select id="reg-level">
+                        <option value="Beginner">Beginner (Starting Out)</option>
+                        <option value="Intermediate" selected>Intermediate (Active)</option>
+                        <option value="Advanced">Advanced (Athlete / Beast)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Primary Fitness Goal</label>
+                    <select id="reg-goal">
+                        <option value="Muscle Gain" selected>Muscle Gain & Hypertrophy</option>
+                        <option value="Weight Loss">Weight Loss & Fat Burn</option>
+                        <option value="Stamina & Endurance">Stamina & Athletic Endurance</option>
+                        <option value="General Health">General Health & Mobility</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Daily Activity Level</label>
+                    <select id="reg-activity">
+                        <option value="Sedentary">Sedentary (Desk Job, little exercise)</option>
+                        <option value="Lightly Active">Lightly Active (1-3 days/wk)</option>
+                        <option value="Moderately Active" selected>Moderately Active (3-5 days/wk)</option>
+                        <option value="Very Active">Very Active (6-7 days/wk)</option>
+                    </select>
+                </div>
+
+                <div class="form-error" id="reg-error"></div>
+                <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Create Account & Calculate Profile</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/sound.js"></script>
+    <script src="/static/js/cv_tracker.js"></script>
+    <script src="/static/js/battle.js"></script>
+    <script src="/static/js/chatbot.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
