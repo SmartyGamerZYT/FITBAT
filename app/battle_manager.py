@@ -13,9 +13,9 @@ class BattleRoom:
         self.age_group = age_group
         self.is_custom_code = is_custom_code
         self.players: Dict[WebSocket, dict] = {} # websocket -> player_data
-        self.is_active = False # Starts active once both or AI ready
+        self.is_active = False
         self.start_time = 0
-        self.duration_seconds = 45 # 45-second high-intensity battle round
+        self.duration_seconds = 45
         self.is_ai_battle = False
         self.ai_player: Optional[dict] = None
         self.ai_task: Optional[asyncio.Task] = None
@@ -23,21 +23,25 @@ class BattleRoom:
 class BattleManager:
     def __init__(self):
         self.active_rooms: Dict[str, BattleRoom] = {}
-        self.waiting_queue: Dict[str, List[dict]] = {} # (exercise_id + '_' + age_group) -> list of waiting websockets
-
-    def get_queue_key(self, exercise_id: str, age_group: str) -> str:
-        return f"{exercise_id}::{age_group}"
+        # Queue entries: {"ws": ws, "user_id": uid, "username": name, "exercise_id": eid, "age_group": ag, "joined_at": ts}
+        self.waiting_queue: List[dict] = []
 
     async def connect_player(self, websocket: WebSocket, user_id: int, username: str, 
-                             exercise_id: str, age_group: str, room_code: Optional[str] = None, force_ai: bool = False):
+                             exercise_id: str, age_group: str, room_code: Optional[str] = None, 
+                             force_ai: bool = False):
         await websocket.accept()
 
-        # 1. Direct Friend Room with Room Code
+        # ----------------------------------------------------
+        # 1. PRIVATE ARENA WITH ROOM CODE (DIRECT FRIEND BATTLE)
+        # ----------------------------------------------------
         if room_code and room_code.strip():
             clean_code = room_code.strip().upper()
+            
+            # Check if friend already created this room (Player 2 is joining)
             if clean_code in self.active_rooms:
                 room = self.active_rooms[clean_code]
-                # Second player joining friend's room!
+                
+                # Add Player 2
                 room.players[websocket] = {
                     "user_id": user_id,
                     "username": username,
@@ -49,34 +53,44 @@ class BattleManager:
                 room.is_active = True
                 room.start_time = time.time()
 
-                # Get the first player
-                first_ws = [ws for ws in room.players.keys() if ws != websocket][0]
-                first_player = room.players[first_ws]
+                # Get Player 1
+                p1_ws = [ws for ws in room.players.keys() if ws != websocket][0]
+                p1_data = room.players[p1_ws]
 
-                # Notify first player that friend joined (initiator can send WebRTC offer)
-                await first_ws.send_json({
-                    "type": "MATCH_START",
-                    "room_id": clean_code,
-                    "exercise_id": room.exercise_id,
-                    "age_group": room.age_group,
-                    "duration": room.duration_seconds,
-                    "is_initiator": True,
-                    "opponent": {"username": username, "is_ai": False}
-                })
+                print(f"[BattleManager] Friend joined Private Arena {clean_code}! Pairing {p1_data['username']} and {username}")
 
-                # Notify second player
-                await websocket.send_json({
-                    "type": "MATCH_START",
-                    "room_id": clean_code,
-                    "exercise_id": room.exercise_id,
-                    "age_group": room.age_group,
-                    "duration": room.duration_seconds,
-                    "is_initiator": False,
-                    "opponent": {"username": first_player["username"], "is_ai": False}
-                })
+                # Notify Player 1 (Initiator for WebRTC stream)
+                try:
+                    await p1_ws.send_json({
+                        "type": "MATCH_START",
+                        "room_id": clean_code,
+                        "exercise_id": room.exercise_id,
+                        "age_group": room.age_group,
+                        "duration": room.duration_seconds,
+                        "is_initiator": True,
+                        "opponent": {"username": username, "is_ai": False}
+                    })
+                except Exception as e:
+                    print(f"Error sending to p1: {e}")
+
+                # Notify Player 2 (Joiner)
+                try:
+                    await websocket.send_json({
+                        "type": "MATCH_START",
+                        "room_id": clean_code,
+                        "exercise_id": room.exercise_id,
+                        "age_group": room.age_group,
+                        "duration": room.duration_seconds,
+                        "is_initiator": False,
+                        "opponent": {"username": p1_data["username"], "is_ai": False}
+                    })
+                except Exception as e:
+                    print(f"Error sending to p2: {e}")
+
                 return clean_code
+
             else:
-                # First player creating friend room
+                # Player 1 is creating the private room
                 room = BattleRoom(clean_code, exercise_id, age_group, is_custom_code=True)
                 room.players[websocket] = {
                     "user_id": user_id,
@@ -87,64 +101,161 @@ class BattleManager:
                     "ws": websocket
                 }
                 self.active_rooms[clean_code] = room
+
+                print(f"[BattleManager] Created Private Arena {clean_code} for user {username}")
+
                 await websocket.send_json({
                     "type": "ROOM_CREATED",
                     "room_code": clean_code,
-                    "message": f"Room {clean_code} created! Share this code with your friend."
+                    "message": f"Private Arena {clean_code} created. Waiting for friend to enter this Arena ID..."
                 })
                 return clean_code
 
-        queue_key = self.get_queue_key(exercise_id, age_group)
+        # ----------------------------------------------------
+        # 2. RANDOM ARENA (STAGE 1: SAME AGE -> STAGE 2: ALL AGES -> STAGE 3: AI)
+        # ----------------------------------------------------
+        if not force_ai:
+            # Step 1: Immediate check if another player in EXACT SAME AGE group & exercise is waiting
+            same_age_opp = None
+            for idx, entry in enumerate(self.waiting_queue):
+                if entry["exercise_id"] == exercise_id and entry["age_group"] == age_group and entry["ws"] != websocket:
+                    same_age_opp = self.waiting_queue.pop(idx)
+                    break
 
-        # 2. Public Matchmaking: Check if another human player is waiting
-        if not force_ai and queue_key in self.waiting_queue and len(self.waiting_queue[queue_key]) > 0:
-            opponent_entry = self.waiting_queue[queue_key].pop(0)
-            room_id = f"room_{int(time.time()*1000)}"
-            room = BattleRoom(room_id, exercise_id, age_group)
-            room.is_active = True
-            room.start_time = time.time()
-            
-            room.players[opponent_entry["ws"]] = {
-                "user_id": opponent_entry["user_id"],
-                "username": opponent_entry["username"],
-                "reps": 0,
-                "combo": 0,
-                "is_ai": False,
-                "ws": opponent_entry["ws"]
-            }
-            room.players[websocket] = {
+            if same_age_opp:
+                return await self.pair_two_players(same_age_opp, {
+                    "ws": websocket, "user_id": user_id, "username": username,
+                    "exercise_id": exercise_id, "age_group": age_group
+                })
+
+            # If not immediately found, add to waiting queue
+            queue_entry = {
+                "ws": websocket,
                 "user_id": user_id,
                 "username": username,
-                "reps": 0,
-                "combo": 0,
-                "is_ai": False,
-                "ws": websocket
-            }
-
-            self.active_rooms[room_id] = room
-
-            # Notify both of match start with WebRTC initiator flag
-            await opponent_entry["ws"].send_json({
-                "type": "MATCH_START",
-                "room_id": room_id,
                 "exercise_id": exercise_id,
                 "age_group": age_group,
+                "joined_at": time.time()
+            }
+            self.waiting_queue.append(queue_entry)
+
+            await websocket.send_json({
+                "type": "SEARCHING_OPPONENT",
+                "stage": "SAME_AGE",
+                "message": f"Searching for {age_group} opponent (10s)..."
+            })
+
+            # Launch progressive matchmaking background task
+            asyncio.create_task(self.run_progressive_matchmaking(websocket, user_id, username, exercise_id, age_group))
+            return "queue"
+
+        # ----------------------------------------------------
+        # 3. DIRECT SOLO AI DUEL
+        # ----------------------------------------------------
+        return await self.spawn_ai_match(websocket, user_id, username, exercise_id, age_group)
+
+    async def run_progressive_matchmaking(self, websocket: WebSocket, user_id: int, username: str, 
+                                          exercise_id: str, age_group: str):
+        # Stage 1: Wait up to 10 seconds for SAME AGE GROUP opponent
+        for _ in range(10):
+            await asyncio.sleep(1.0)
+            # Check if this player was already paired by another incoming player
+            if not any(e["ws"] == websocket for e in self.waiting_queue):
+                return # Already matched!
+
+        # Stage 2 (10-18s): Expand search to ALL AGE GROUPS for the same exercise!
+        print(f"[Matchmaker] 10s elapsed for {username}. Expanding search to ALL age groups...")
+        try:
+            await websocket.send_json({
+                "type": "SEARCHING_OPPONENT",
+                "stage": "ANY_AGE",
+                "message": "Expanding search to warriors in ALL age divisions..."
+            })
+        except Exception:
+            return
+
+        # Check if anyone in any age group is waiting for this exercise
+        any_age_opp = None
+        for idx, entry in enumerate(self.waiting_queue):
+            if entry["exercise_id"] == exercise_id and entry["ws"] != websocket:
+                any_age_opp = self.waiting_queue.pop(idx)
+                break
+
+        if any_age_opp:
+            # Remove self from queue too
+            self.waiting_queue = [e for e in self.waiting_queue if e["ws"] != websocket]
+            return await self.pair_two_players(any_age_opp, {
+                "ws": websocket, "user_id": user_id, "username": username,
+                "exercise_id": exercise_id, "age_group": age_group
+            })
+
+        # Wait another 6 seconds for any age group
+        for _ in range(6):
+            await asyncio.sleep(1.0)
+            if not any(e["ws"] == websocket for e in self.waiting_queue):
+                return # Already matched!
+
+        # Stage 3: Fallback to smart AI rival so user never waits forever
+        if any(e["ws"] == websocket for e in self.waiting_queue):
+            self.waiting_queue = [e for e in self.waiting_queue if e["ws"] != websocket]
+            print(f"[Matchmaker] No human opponent found in 16s. Spawning AI rival for {username}")
+            await self.spawn_ai_match(websocket, user_id, username, exercise_id, age_group)
+
+    async def pair_two_players(self, p1_entry: dict, p2_entry: dict) -> str:
+        room_id = f"random_room_{int(time.time()*1000)}"
+        room = BattleRoom(room_id, p1_entry["exercise_id"], p1_entry["age_group"])
+        room.is_active = True
+        room.start_time = time.time()
+
+        p1_ws = p1_entry["ws"]
+        p2_ws = p2_entry["ws"]
+
+        room.players[p1_ws] = {
+            "user_id": p1_entry["user_id"],
+            "username": p1_entry["username"],
+            "reps": 0, "combo": 0, "is_ai": False, "ws": p1_ws
+        }
+        room.players[p2_ws] = {
+            "user_id": p2_entry["user_id"],
+            "username": p2_entry["username"],
+            "reps": 0, "combo": 0, "is_ai": False, "ws": p2_ws
+        }
+
+        self.active_rooms[room_id] = room
+        print(f"[Matchmaker] PAIRED: {p1_entry['username']} vs {p2_entry['username']} in {room_id}")
+
+        # Notify Player 1 (Initiator for WebRTC stream)
+        try:
+            await p1_ws.send_json({
+                "type": "MATCH_START",
+                "room_id": room_id,
+                "exercise_id": p1_entry["exercise_id"],
+                "age_group": p1_entry["age_group"],
                 "duration": room.duration_seconds,
                 "is_initiator": True,
-                "opponent": {"username": username, "is_ai": False}
+                "opponent": {"username": p2_entry["username"], "is_ai": False}
             })
-            await websocket.send_json({
+        except Exception:
+            pass
+
+        # Notify Player 2
+        try:
+            await p2_ws.send_json({
                 "type": "MATCH_START",
                 "room_id": room_id,
-                "exercise_id": exercise_id,
-                "age_group": age_group,
+                "exercise_id": p2_entry["exercise_id"],
+                "age_group": p2_entry["age_group"],
                 "duration": room.duration_seconds,
                 "is_initiator": False,
-                "opponent": {"username": opponent_entry["username"], "is_ai": False}
+                "opponent": {"username": p1_entry["username"], "is_ai": False}
             })
-            return room_id
+        except Exception:
+            pass
 
-        # 3. Solo AI Practice or Fallback
+        return room_id
+
+    async def spawn_ai_match(self, websocket: WebSocket, user_id: int, username: str, 
+                             exercise_id: str, age_group: str) -> str:
         room_id = f"ai_room_{int(time.time()*1000)}"
         room = BattleRoom(room_id, exercise_id, age_group)
         room.is_active = True
@@ -157,7 +268,7 @@ class BattleManager:
             "Master (30-45)": ["Centurion [AI]", "SteelSergeant [AI]", "FrostWolf [AI]", "Spartan99 [AI]"],
             "Legend (46+)": ["GrandMaster [AI]", "SilverPhoenix [AI]", "OdinForce [AI]", "ImmortalRyu [AI]"]
         }
-        name_pool = ai_names.get(age_group, ["AI_Warrior", "NeonFighter", "FitBot_X"])
+        name_pool = ai_names.get(age_group, ["TitanPulse [AI]", "ApexValkyrie [AI]", "FitBot_X [AI]"])
         ai_name = random.choice(name_pool)
 
         room.ai_player = {
@@ -179,21 +290,23 @@ class BattleManager:
 
         self.active_rooms[room_id] = room
 
-        await websocket.send_json({
-            "type": "MATCH_START",
-            "room_id": room_id,
-            "exercise_id": exercise_id,
-            "age_group": age_group,
-            "duration": room.duration_seconds,
-            "is_initiator": False,
-            "opponent": {"username": ai_name, "is_ai": True}
-        })
+        try:
+            await websocket.send_json({
+                "type": "MATCH_START",
+                "room_id": room_id,
+                "exercise_id": exercise_id,
+                "age_group": age_group,
+                "duration": room.duration_seconds,
+                "is_initiator": False,
+                "opponent": {"username": ai_name, "is_ai": True}
+            })
+        except Exception:
+            return room_id
 
         room.ai_task = asyncio.create_task(self.run_ai_opponent_loop(room, websocket))
         return room_id
 
     async def forward_webrtc_signaling(self, websocket: WebSocket, room_id: str, data: dict):
-        """Forwards WebRTC video stream offers, answers, and ICE candidates between peers"""
         if room_id not in self.active_rooms:
             return
         room = self.active_rooms[room_id]
@@ -254,6 +367,10 @@ class BattleManager:
                     pass
 
     async def finish_match(self, room_id: str, triggering_ws: Optional[WebSocket] = None):
+        # Remove from queue if disconnect happens
+        if triggering_ws:
+            self.waiting_queue = [e for e in self.waiting_queue if e["ws"] != triggering_ws]
+
         if room_id not in self.active_rooms:
             return
         room = self.active_rooms[room_id]
@@ -265,7 +382,7 @@ class BattleManager:
         if room.is_ai_battle:
             for ws, player in room.players.items():
                 user_reps = player["reps"]
-                ai_reps = room.ai_player["reps"]
+                ai_reps = room.ai_player["reps"] if room.ai_player else 0
                 
                 if user_reps > ai_reps:
                     outcome = "VICTORY"
@@ -279,7 +396,7 @@ class BattleManager:
 
                 self.record_match_result(
                     user_id=player["user_id"],
-                    opponent_name=room.ai_player["username"],
+                    opponent_name=room.ai_player["username"] if room.ai_player else "AI",
                     opponent_type="AI",
                     age_group=room.age_group,
                     exercise_id=room.exercise_id,
