@@ -1,4 +1,5 @@
 import os
+import random
 from datetime import datetime, date
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Header
@@ -14,7 +15,7 @@ from .chatbot import FitnessCoachChatbot
 from .exercises import get_all_exercises, get_exercise_by_id
 from .battle_manager import battle_manager
 
-app = FastAPI(title="FITBAT - Fitness Battles", version="1.1.0")
+app = FastAPI(title="FITBAT - Fitness Battles", version="1.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -465,15 +466,18 @@ def get_battle_history(user: dict = Depends(get_current_user)):
     conn.close()
     return {"history": [dict(r) for r in rows]}
 
-# --- Real-time WebSocket Battle Arena with Friend Room Code & WebRTC Peer Video ---
+# --- Real-time WebSocket Battle Arena (Supports Authenticated & Guest Mobile Users) ---
 @app.websocket("/ws/battle")
-async def websocket_battle_endpoint(websocket: WebSocket, token: str, exercise_id: str = "pushups", 
+async def websocket_battle_endpoint(websocket: WebSocket, token: Optional[str] = None, exercise_id: str = "pushups", 
                                     age_group: str = "Prime (20-29)", room_code: Optional[str] = None, 
                                     force_ai: bool = False):
-    session = get_current_user_from_token(token)
+    session = get_current_user_from_token(token) if token else None
+    
+    # If not logged in or joining as a guest from mobile, generate guest session so battle never fails!
     if not session:
-        await websocket.close(code=4001)
-        return
+        guest_id = random.randint(50000, 99999)
+        guest_name = f"Warrior_{random.randint(100, 999)}"
+        session = {"user_id": guest_id, "username": guest_name}
 
     user_id = session["user_id"]
     username = session["username"]

@@ -16,8 +16,6 @@ class FitbatApp {
         const token = localStorage.getItem("fitbat_token");
         if (token) {
             await this.loadUserProfile();
-        } else {
-            this.showAuthModal("login");
         }
         this.setupEventListeners();
     }
@@ -152,7 +150,6 @@ class FitbatApp {
             });
             if (!res.ok) {
                 localStorage.removeItem("fitbat_token");
-                this.showAuthModal("login");
                 return;
             }
             const data = await res.json();
@@ -169,6 +166,7 @@ class FitbatApp {
         localStorage.removeItem("fitbat_token");
         this.currentUser = null;
         this.currentMetrics = null;
+        document.getElementById("header-user-badge").classList.add("hidden");
         this.showAuthModal("login");
     }
 
@@ -260,14 +258,14 @@ class FitbatApp {
     // 1. Random Arena (Quick Match vs any online player or AI)
     startRandomArena() {
         this.showView("battle_arena");
-        window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, null);
+        window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, null, false);
     }
 
     // 2. Private Arena (Creates Room & displays Arena ID for friend)
     createPrivateArena() {
         const randomId = "ARENA-" + Math.floor(100 + Math.random() * 900);
         this.showView("battle_arena");
-        window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, randomId);
+        window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, randomId, true);
     }
 
     // 3. Enter Arena ID (Joins friend's private room)
@@ -279,7 +277,7 @@ class FitbatApp {
             return;
         }
         this.showView("battle_arena");
-        window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, code);
+        window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, code, false);
     }
 
     // --- DAILY QUESTS & INTERACTIVE CAMERA TRACKING ---

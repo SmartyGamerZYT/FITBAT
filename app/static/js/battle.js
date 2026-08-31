@@ -16,9 +16,10 @@ class BattleArena {
         this.peerConnection = null;
         this.isInitiator = false;
         this.roomCode = null;
+        this.isCreator = false;
     }
 
-    async startBattle(exerciseId, ageGroup, forceAi = false, roomCode = null) {
+    async startBattle(exerciseId, ageGroup, forceAi = false, roomCode = null, isCreator = false) {
         this.currentExercise = exerciseId;
         this.currentAgeGroup = ageGroup;
         this.userReps = 0;
@@ -27,17 +28,14 @@ class BattleArena {
         this.oppCombo = 0;
         this.timer = 45;
         this.roomCode = roomCode;
+        this.isCreator = isCreator;
 
         if (window.soundEngine) window.soundEngine.playCountdown(true);
 
-        const token = localStorage.getItem("fitbat_token");
-        if (!token) {
-            alert("Please login first to enter the Battle Arena!");
-            return;
-        }
+        const token = localStorage.getItem("fitbat_token") || "";
 
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        let wsUrl = `${protocol}//${window.location.host}/ws/battle?token=${token}&exercise_id=${exerciseId}&age_group=${encodeURIComponent(ageGroup)}&force_ai=${forceAi}`;
+        let wsUrl = `${protocol}//${window.location.host}/ws/battle?token=${encodeURIComponent(token)}&exercise_id=${exerciseId}&age_group=${encodeURIComponent(ageGroup)}&force_ai=${forceAi}`;
         if (roomCode) {
             wsUrl += `&room_code=${encodeURIComponent(roomCode)}`;
         }
@@ -69,20 +67,31 @@ class BattleArena {
             this.onPlayerFeedback.bind(this)
         );
 
-        if (roomCode) {
+        // ONLY show the "Private Arena Created" popup if this user is the CREATOR
+        if (isCreator && roomCode) {
             this.showWaitingForFriendModal(roomCode);
+        } else if (roomCode) {
+            this.showBattleOverlay(`Connecting to Arena ${roomCode}...`);
         }
     }
 
     async handleServerMessage(data) {
+        console.log("[BattleArena] Received event:", data.type);
+
         switch (data.type) {
             case "ROOM_CREATED":
                 this.roomCode = data.room_code;
                 this.showWaitingForFriendModal(data.room_code);
                 break;
 
+            case "SEARCHING_OPPONENT":
+                this.showBattleOverlay(data.message);
+                break;
+
             case "MATCH_START":
+                // 1. Instantly close any waiting popup on BOTH devices!
                 this.hideWaitingForFriendModal();
+                
                 this.isBattleActive = true;
                 this.opponentName = data.opponent.username;
                 this.isInitiator = data.is_initiator || false;
@@ -94,6 +103,7 @@ class BattleArena {
                 this.showBattleOverlay("MATCH CONNECTED! 3... 2... 1... FIGHT!");
                 this.startTimer(data.duration || 45);
 
+                // If real human opponent, start WebRTC peer camera connection!
                 if (!data.opponent.is_ai) {
                     await this.initWebRTCPeerConnection();
                 } else {
@@ -137,13 +147,15 @@ class BattleArena {
 
     hideWaitingForFriendModal() {
         const modal = document.getElementById("private-arena-waiting-modal");
-        if (modal) modal.classList.remove("open");
+        if (modal) {
+            modal.classList.remove("open");
+        }
     }
 
     copyArenaId() {
         const code = document.getElementById("display-arena-id").textContent;
         navigator.clipboard.writeText(code);
-        alert(`Arena ID ${code} copied to clipboard! Share it with your friend.`);
+        alert(`Arena ID ${code} copied to clipboard! Send this code to your friend.`);
     }
 
     // --- WebRTC Real Camera Streaming with Friends ---
@@ -151,7 +163,8 @@ class BattleArena {
         const config = {
             iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
-                { urls: "stun:stun1.l.google.com:19302" }
+                { urls: "stun:stun1.l.google.com:19302" },
+                { urls: "stun:stun2.l.google.com:19302" }
             ]
         };
         this.peerConnection = new RTCPeerConnection(config);
@@ -169,6 +182,9 @@ class BattleArena {
             if (oppVideo && event.streams[0]) {
                 oppVideo.srcObject = event.streams[0];
                 oppVideo.classList.remove("hidden");
+                oppVideo.setAttribute("playsinline", "true");
+                oppVideo.autoplay = true;
+                oppVideo.play().catch(e => console.warn(e));
                 if (oppPlaceholder) oppPlaceholder.classList.add("hidden");
             }
         };
