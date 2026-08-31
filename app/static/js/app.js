@@ -257,22 +257,25 @@ class FitbatApp {
         this.renderBattleSelect();
     }
 
-    startBattleSession(forceAi = false) {
+    // 1. Random Arena (Quick Match vs any online player or AI)
+    startRandomArena() {
         this.showView("battle_arena");
-        window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, forceAi, null);
+        window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, null);
     }
 
-    createFriendRoom() {
-        const randomCode = "BAT-" + Math.floor(100 + Math.random() * 900);
+    // 2. Private Arena (Creates Room & displays Arena ID for friend)
+    createPrivateArena() {
+        const randomId = "ARENA-" + Math.floor(100 + Math.random() * 900);
         this.showView("battle_arena");
-        window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, randomCode);
+        window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, randomId);
     }
 
-    joinFriendRoom() {
-        const codeInput = document.getElementById("friend-room-code-input");
+    // 3. Enter Arena ID (Joins friend's private room)
+    joinWithArenaId() {
+        const codeInput = document.getElementById("enter-arena-id-input");
         const code = codeInput ? codeInput.value.trim().toUpperCase() : "";
         if (!code) {
-            alert("Please enter your friend's room code!");
+            alert("Please enter the Arena ID sent by your friend (e.g. ARENA-450)!");
             return;
         }
         this.showView("battle_arena");
@@ -343,6 +346,10 @@ class FitbatApp {
         document.getElementById("quest-modal-desc").textContent = task.description;
         document.getElementById("quest-target-display").textContent = `${this.questReps} / ${task.target_value} ${task.unit}`;
         
+        const initPct = Math.min(100, Math.round((this.questReps / task.target_value) * 100));
+        document.getElementById("quest-modal-progress-bar").style.width = `${initPct}%`;
+        document.getElementById("quest-feedback-text").textContent = "Position yourself in front of camera";
+        
         modal.classList.add("open");
 
         const exId = task.exercise_id || "pushups";
@@ -372,23 +379,21 @@ class FitbatApp {
         if (window.soundEngine) window.soundEngine.playRep();
 
         if (this.questReps >= target) {
-            // Quest Completed!
             if (window.soundEngine) window.soundEngine.playVictory();
             window.battleArena.spawnConfetti();
             
             const taskToComplete = this.activeQuest;
-            this.activeQuest = null; // prevent double submit
+            this.activeQuest = null;
             window.poseTracker.stop();
 
             document.getElementById("quest-feedback-text").textContent = "🎉 QUEST COMPLETED! EXCELLENT WORK!";
             document.getElementById("quest-feedback-text").style.color = "var(--emerald)";
 
-            // Submit to server
             await this.progressTask(taskToComplete.id, target);
 
             setTimeout(() => {
                 this.closeQuestModal();
-            }, 2000);
+            }, 2200);
         }
     }
 

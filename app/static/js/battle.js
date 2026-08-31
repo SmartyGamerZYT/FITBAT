@@ -12,7 +12,7 @@ class BattleArena {
         this.timer = 45;
         this.timerInterval = null;
         this.isBattleActive = false;
-        this.opponentName = "AI Rival";
+        this.opponentName = "Opponent";
         this.peerConnection = null;
         this.isInitiator = false;
         this.roomCode = null;
@@ -70,30 +70,30 @@ class BattleArena {
         );
 
         if (roomCode) {
-            this.showBattleOverlay(`Waiting in Room ${roomCode}...`);
-        } else {
-            this.showBattleOverlay("3... 2... 1... FIGHT!");
+            this.showWaitingForFriendModal(roomCode);
         }
     }
 
     async handleServerMessage(data) {
         switch (data.type) {
             case "ROOM_CREATED":
-                this.showBattleOverlay(`Room ${data.room_code} Created! Share with friend.`);
-                document.getElementById("opp-name-display").textContent = "Waiting for Friend...";
+                this.roomCode = data.room_code;
+                this.showWaitingForFriendModal(data.room_code);
                 break;
 
             case "MATCH_START":
+                this.hideWaitingForFriendModal();
                 this.isBattleActive = true;
                 this.opponentName = data.opponent.username;
                 this.isInitiator = data.is_initiator || false;
+                
                 document.getElementById("opp-name-display").textContent = this.opponentName;
                 document.getElementById("battle-exercise-display").textContent = data.exercise_id.replace("_", " ").toUpperCase();
                 document.getElementById("battle-age-display").textContent = data.age_group;
-                this.showBattleOverlay("MATCH CONNECTED! FIGHT!");
+                
+                this.showBattleOverlay("MATCH CONNECTED! 3... 2... 1... FIGHT!");
                 this.startTimer(data.duration || 45);
 
-                // If real human opponent, start WebRTC peer camera connection!
                 if (!data.opponent.is_ai) {
                     await this.initWebRTCPeerConnection();
                 } else {
@@ -127,6 +127,25 @@ class BattleArena {
         }
     }
 
+    showWaitingForFriendModal(code) {
+        const modal = document.getElementById("private-arena-waiting-modal");
+        if (modal) {
+            document.getElementById("display-arena-id").textContent = code;
+            modal.classList.add("open");
+        }
+    }
+
+    hideWaitingForFriendModal() {
+        const modal = document.getElementById("private-arena-waiting-modal");
+        if (modal) modal.classList.remove("open");
+    }
+
+    copyArenaId() {
+        const code = document.getElementById("display-arena-id").textContent;
+        navigator.clipboard.writeText(code);
+        alert(`Arena ID ${code} copied to clipboard! Share it with your friend.`);
+    }
+
     // --- WebRTC Real Camera Streaming with Friends ---
     async initWebRTCPeerConnection() {
         const config = {
@@ -137,7 +156,6 @@ class BattleArena {
         };
         this.peerConnection = new RTCPeerConnection(config);
 
-        // Add local video stream to peer connection
         const localVideo = document.getElementById("battle-user-video");
         if (localVideo && localVideo.srcObject) {
             localVideo.srcObject.getTracks().forEach(track => {
@@ -145,7 +163,6 @@ class BattleArena {
             });
         }
 
-        // When remote track arrives, stream friend's camera to opponent viewport!
         this.peerConnection.ontrack = (event) => {
             const oppVideo = document.getElementById("battle-opp-video");
             const oppPlaceholder = document.getElementById("battle-opp-placeholder");
@@ -307,12 +324,8 @@ class BattleArena {
     }
 
     showBattleOverlay(text) {
-        const overlay = document.getElementById("battle-countdown-overlay");
-        if (overlay) {
-            overlay.textContent = text;
-            overlay.classList.add("active");
-            setTimeout(() => overlay.classList.remove("active"), 1500);
-        }
+        const fbEl = document.getElementById("battle-form-feedback");
+        if (fbEl) fbEl.textContent = text;
     }
 
     finishRound() {
@@ -327,6 +340,7 @@ class BattleArena {
         if (this.timerInterval) clearInterval(this.timerInterval);
         window.poseTracker.stop();
         if (this.peerConnection) this.peerConnection.close();
+        this.hideWaitingForFriendModal();
 
         const isVictory = resultData.outcome === "VICTORY";
         if (isVictory) {
@@ -376,6 +390,7 @@ class BattleArena {
         if (this.ws) this.ws.close();
         if (this.peerConnection) this.peerConnection.close();
         window.poseTracker.stop();
+        this.hideWaitingForFriendModal();
 
         document.getElementById("battle-result-modal").classList.remove("open");
         if (window.app) window.app.showView("dashboard");

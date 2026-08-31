@@ -56,7 +56,7 @@
                         Your fitness statistics and personalized AI training blueprint are ready. Choose a battle mode or complete daily camera quests to level up!
                     </p>
                     <div style="margin-top: 1.2rem; display: flex; gap: 0.8rem; flex-wrap: wrap;">
-                        <button class="btn-primary btn-battle" data-nav="battle_select">Enter Battle Arena ⚔️</button>
+                        <button class="btn-primary btn-battle" data-nav="battle_select">Enter Battle Ground ⚔️</button>
                         <button class="btn-secondary" onclick="window.chatbotWidget.toggle()">Ask AI Coach 🤖</button>
                     </div>
                 </div>
@@ -132,38 +132,69 @@
             </div>
         </section>
 
-        <!-- VIEW 2: BATTLE SELECT -->
+        <!-- VIEW 2: BATTLE SELECT WITH 3 ARENA OPTIONS -->
         <section id="view-battle_select" class="app-view">
             <div style="margin-bottom: 1.5rem;">
-                <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">⚔️ The Battle Ground</h1>
-                <p style="color: var(--text-secondary);">Challenge matched peers, battle your friends with live camera, or duel smart AI rivals.</p>
+                <h1 style="font-family: var(--font-heading); font-size: 2.2rem; color: var(--text-primary);">⚔️ The Battle Ground</h1>
+                <p style="color: var(--text-secondary);">Select your preferred workout and choose one of the 3 Battle Modes below.</p>
             </div>
 
-            <!-- Friend Room Direct Battle Box -->
-            <div class="friend-room-box">
-                <div>
-                    <h3 style="font-size: 1.1rem; color: var(--blue); margin-bottom: 0.2rem;">👥 Battle a Friend with Live Camera!</h3>
-                    <p style="color: var(--text-secondary); font-size: 0.88rem;">Create a private battle code or join your friend's room.</p>
-                </div>
-                <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
-                    <button class="btn-primary" onclick="window.app.createFriendRoom()">+ Create Room Code</button>
-                    <span style="color: var(--text-muted); font-weight: 700;">OR</span>
-                    <input type="text" id="friend-room-code-input" placeholder="e.g. BAT-450" style="padding: 0.65rem 0.9rem; border: 1px solid var(--border-color); border-radius: 10px; width: 140px; font-weight: 800; text-transform: uppercase;">
-                    <button class="btn-secondary" onclick="window.app.joinFriendRoom()">Join Friend Room</button>
-                </div>
-            </div>
-
-            <div class="glass-card" style="margin-bottom: 1.5rem;">
-                <h4 style="color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.5px;">Step 1: Select Age Division</h4>
+            <!-- Step 1: Age & Exercise Selection -->
+            <div class="glass-card" style="margin-bottom: 1.2rem;">
+                <h4 style="color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.5px;">Step 1: Your Age Group</h4>
                 <div class="age-selector-bar" id="age-group-pills"></div>
             </div>
 
             <h4 style="color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 0.8rem;">Step 2: Choose Exercise (12 Disciplines)</h4>
             <div class="exercises-grid" id="exercises-grid-container"></div>
 
-            <div style="display: flex; justify-content: center; gap: 1.2rem; margin-top: 1.8rem; flex-wrap: wrap;">
-                <button class="btn-primary btn-battle" onclick="window.app.startBattleSession(false)">Matchmaking Battle (PvP / AI) ⚔️</button>
-                <button class="btn-secondary" onclick="window.app.startBattleSession(true)">Practice vs AI Rival 🤖</button>
+            <!-- Step 3: 3 Clear Battle Modes -->
+            <h4 style="color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.5px; margin: 1.5rem 0 0.8rem 0;">Step 3: Choose Battle Mode</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 1.2rem; margin-bottom: 2rem;">
+                
+                <!-- Option 1: Random Arena -->
+                <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-between; border-top: 4px solid var(--blue);">
+                    <div>
+                        <div style="font-size: 2.2rem; margin-bottom: 0.4rem;">🎲</div>
+                        <h3 style="font-family: var(--font-heading); font-size: 1.2rem; color: var(--text-primary);">Random Arena</h3>
+                        <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0.5rem 0 1rem 0; line-height: 1.4;">
+                            Instantly matches you with any online opponent worldwide who also entered Random Arena, or a smart AI opponent!
+                        </p>
+                    </div>
+                    <button class="btn-primary" style="width: 100%;" onclick="window.app.startRandomArena()">
+                        Enter Random Arena ⚔️
+                    </button>
+                </div>
+
+                <!-- Option 2: Private Arena (Create ID) -->
+                <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-between; border-top: 4px solid var(--coral);">
+                    <div>
+                        <div style="font-size: 2.2rem; margin-bottom: 0.4rem;">🛡️</div>
+                        <h3 style="font-family: var(--font-heading); font-size: 1.2rem; color: var(--text-primary);">Private Arena</h3>
+                        <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0.5rem 0 1rem 0; line-height: 1.4;">
+                            Generates a unique <strong>Arena ID</strong>. Give this ID to your friend so they can enter and battle you with live camera!
+                        </p>
+                    </div>
+                    <button class="btn-primary btn-battle" style="width: 100%;" onclick="window.app.createPrivateArena()">
+                        Create Private Arena 🛡️
+                    </button>
+                </div>
+
+                <!-- Option 3: Enter Arena ID (Join Friend) -->
+                <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-between; border-top: 4px solid var(--emerald);">
+                    <div>
+                        <div style="font-size: 2.2rem; margin-bottom: 0.4rem;">🔑</div>
+                        <h3 style="font-family: var(--font-heading); font-size: 1.2rem; color: var(--text-primary);">Enter Arena ID</h3>
+                        <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0.5rem 0 0.8rem 0; line-height: 1.4;">
+                            Friend created a room? Enter their Arena ID below to connect and battle!
+                        </p>
+                        <input type="text" id="enter-arena-id-input" placeholder="e.g. ARENA-542" style="width: 100%; padding: 0.7rem; border: 1px solid var(--border-color); border-radius: 10px; font-weight: 800; text-transform: uppercase; margin-bottom: 0.8rem;">
+                    </div>
+                    <button class="btn-primary" style="width: 100%; background: var(--emerald);" onclick="window.app.joinWithArenaId()">
+                        Join Friend Arena 🚀
+                    </button>
+                </div>
+
             </div>
         </section>
 
@@ -342,7 +373,29 @@
 
     </main>
 
-    <!-- Interactive Quest Camera Modal -->
+    <!-- Modal 1: Private Arena Waiting Dialog with Arena ID & Copy -->
+    <div class="modal-overlay" id="private-arena-waiting-modal">
+        <div class="modal-box" style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">🛡️</div>
+            <h2 style="font-family: var(--font-heading); font-size: 1.6rem; color: var(--text-primary); margin-bottom: 0.4rem;">Private Arena Created!</h2>
+            <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 1.2rem;">Share this Arena ID with your friend so they can join on their phone or laptop:</p>
+            
+            <div style="background: var(--blue-light); border: 2px dashed var(--blue); padding: 1.2rem; border-radius: 16px; margin-bottom: 1.2rem;">
+                <span style="font-size: 0.8rem; text-transform: uppercase; font-weight: 800; color: var(--blue); letter-spacing: 1px;">YOUR ARENA ID</span>
+                <div id="display-arena-id" style="font-family: var(--font-heading); font-size: 2.6rem; font-weight: 900; color: var(--blue); margin: 0.3rem 0;">ARENA-000</div>
+                <button class="btn-secondary" style="font-size: 0.9rem; padding: 0.5rem 1rem; background: #fff;" onclick="window.battleArena.copyArenaId()">📋 Copy Arena ID</button>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.6rem; color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 1.5rem;">
+                <div class="ai-avatar-pulse" style="font-size: 1.2rem;">⏳</div>
+                <span>Waiting for friend to enter this ID...</span>
+            </div>
+
+            <button class="btn-secondary" style="width: 100%; color: var(--coral);" onclick="window.battleArena.exitBattle()">Cancel Arena</button>
+        </div>
+    </div>
+
+    <!-- Modal 2: Interactive Quest Camera Challenge -->
     <div class="modal-overlay" id="quest-camera-modal">
         <div class="quest-modal-box">
             <div style="display: flex; justify-content: space-between; align-items: center;">
