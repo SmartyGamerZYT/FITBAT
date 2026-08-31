@@ -13,10 +13,20 @@ class FitbatApp {
 
     async init() {
         await this.loadExercises();
+        
+        // Always load tasks, activity, and leaderboards immediately!
+        await this.loadDailyTasks();
+        await this.loadTodayActivity();
+        await this.loadLeaderboards();
+
         const token = localStorage.getItem("fitbat_token");
         if (token) {
             await this.loadUserProfile();
+        } else {
+            // If user is not logged in, show Auth modal
+            this.showAuthModal("login");
         }
+
         this.setupEventListeners();
     }
 
@@ -61,12 +71,15 @@ class FitbatApp {
 
     showAuthModal(tab = "login") {
         const modal = document.getElementById("auth-modal");
-        modal.classList.add("open");
-        this.switchAuthTab(tab);
+        if (modal) {
+            modal.classList.add("open");
+            this.switchAuthTab(tab);
+        }
     }
 
     hideAuthModal() {
-        document.getElementById("auth-modal").classList.remove("open");
+        const modal = document.getElementById("auth-modal");
+        if (modal) modal.classList.remove("open");
     }
 
     switchAuthTab(tab) {
@@ -98,6 +111,7 @@ class FitbatApp {
             this.hideAuthModal();
             this.updateHeaderUI();
             this.renderDashboard();
+            this.loadDailyTasks();
             this.showView("dashboard");
         } catch (err) {
             errEl.textContent = err.message;
@@ -134,6 +148,7 @@ class FitbatApp {
             localStorage.setItem("fitbat_token", data.token);
             await this.loadUserProfile();
             this.hideAuthModal();
+            this.loadDailyTasks();
             this.showView("dashboard");
         } catch (err) {
             errEl.textContent = err.message;
@@ -150,6 +165,7 @@ class FitbatApp {
             });
             if (!res.ok) {
                 localStorage.removeItem("fitbat_token");
+                this.updateHeaderUI();
                 return;
             }
             const data = await res.json();
@@ -166,17 +182,25 @@ class FitbatApp {
         localStorage.removeItem("fitbat_token");
         this.currentUser = null;
         this.currentMetrics = null;
-        document.getElementById("header-user-badge").classList.add("hidden");
+        this.updateHeaderUI();
         this.showAuthModal("login");
     }
 
     updateHeaderUI() {
-        if (!this.currentUser) return;
-        document.getElementById("header-username").textContent = this.currentUser.username;
-        document.getElementById("header-points").textContent = `${this.currentUser.points} XP`;
-        document.getElementById("header-coins").textContent = `${this.currentUser.coins} 🪙`;
-        document.getElementById("header-streak").textContent = `🔥 ${this.currentUser.streak}d`;
-        document.getElementById("header-user-badge").classList.remove("hidden");
+        const userBadge = document.getElementById("header-user-badge");
+        const loginBtn = document.getElementById("header-login-btn");
+
+        if (this.currentUser) {
+            document.getElementById("header-username").textContent = this.currentUser.username;
+            document.getElementById("header-points").textContent = `${this.currentUser.points} XP`;
+            document.getElementById("header-coins").textContent = `${this.currentUser.coins} 🪙`;
+            document.getElementById("header-streak").textContent = `🔥 ${this.currentUser.streak}d`;
+            if (userBadge) userBadge.classList.remove("hidden");
+            if (loginBtn) loginBtn.classList.add("hidden");
+        } else {
+            if (userBadge) userBadge.classList.add("hidden");
+            if (loginBtn) loginBtn.classList.remove("hidden");
+        }
     }
 
     renderDashboard() {
@@ -255,20 +279,20 @@ class FitbatApp {
         this.renderBattleSelect();
     }
 
-    // 1. Random Arena (Quick Match vs any online player or AI)
+    // 1. Random Arena
     startRandomArena() {
         this.showView("battle_arena");
         window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, null, false);
     }
 
-    // 2. Private Arena (Creates Room & displays Arena ID for friend)
+    // 2. Private Arena (Creator)
     createPrivateArena() {
         const randomId = "ARENA-" + Math.floor(100 + Math.random() * 900);
         this.showView("battle_arena");
         window.battleArena.startBattle(this.selectedExercise, this.selectedAgeGroup, false, randomId, true);
     }
 
-    // 3. Enter Arena ID (Joins friend's private room)
+    // 3. Enter Arena ID (Joiner)
     joinWithArenaId() {
         const codeInput = document.getElementById("enter-arena-id-input");
         const code = codeInput ? codeInput.value.trim().toUpperCase() : "";
@@ -283,12 +307,10 @@ class FitbatApp {
     // --- DAILY QUESTS & INTERACTIVE CAMERA TRACKING ---
     async loadDailyTasks() {
         const token = localStorage.getItem("fitbat_token");
-        if (!token) return;
+        const headers = token ? { "Authorization": `Bearer ${token}` } : {};
 
         try {
-            const res = await fetch("/api/tasks/daily", {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
+            const res = await fetch("/api/tasks/daily", { headers });
             const data = await res.json();
             const container = document.getElementById("daily-tasks-list");
             if (!container) return;
@@ -411,13 +433,13 @@ class FitbatApp {
 
     async progressTask(taskId, targetValue) {
         const token = localStorage.getItem("fitbat_token");
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
         try {
             const res = await fetch("/api/tasks/complete", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
+                headers: headers,
                 body: JSON.stringify({ task_id: taskId, progress: targetValue })
             });
             const data = await res.json();
@@ -433,21 +455,19 @@ class FitbatApp {
 
     async loadTodayActivity() {
         const token = localStorage.getItem("fitbat_token");
-        if (!token) return;
+        const headers = token ? { "Authorization": `Bearer ${token}` } : {};
 
         try {
-            const res = await fetch("/api/activity/today", {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
+            const res = await fetch("/api/activity/today", { headers });
             const act = await res.json();
             
-            document.getElementById("act-steps-count").textContent = act.steps.toLocaleString();
-            document.getElementById("act-distance").textContent = `${act.distance_km.toFixed(2)} km`;
-            document.getElementById("act-calories").textContent = `${Math.round(act.calories_burned)} kcal`;
-            document.getElementById("act-active-min").textContent = `${act.active_minutes} min`;
+            document.getElementById("act-steps-count").textContent = (act.steps || 0).toLocaleString();
+            document.getElementById("act-distance").textContent = `${(act.distance_km || 0).toFixed(2)} km`;
+            document.getElementById("act-calories").textContent = `${Math.round(act.calories_burned || 0)} kcal`;
+            document.getElementById("act-active-min").textContent = `${act.active_minutes || 0} min`;
 
             const target = 8000;
-            const pct = Math.min(100, Math.round((act.steps / target) * 100));
+            const pct = Math.min(100, Math.round(((act.steps || 0) / target) * 100));
             document.getElementById("act-step-pct").textContent = `${pct}% of 8,000 goal`;
             const fill = document.getElementById("step-progress-bar");
             if (fill) fill.style.width = `${pct}%`;
@@ -458,6 +478,9 @@ class FitbatApp {
 
     async simulateWalking(stepsToAdd = 500) {
         const token = localStorage.getItem("fitbat_token");
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
         const distanceKm = stepsToAdd * 0.00075;
         const caloriesBurned = stepsToAdd * 0.04;
         const activeMinutes = Math.round(stepsToAdd / 100);
@@ -465,10 +488,7 @@ class FitbatApp {
         try {
             await fetch("/api/activity/log", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
+                headers: headers,
                 body: JSON.stringify({
                     steps: stepsToAdd,
                     distance_km: distanceKm,

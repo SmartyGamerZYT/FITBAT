@@ -35,12 +35,18 @@
             <button class="nav-link" data-nav="leaderboard" id="nav-leaderboard">🏆 Leaderboards</button>
         </nav>
 
-        <div class="user-badge-wrap hidden" id="header-user-badge">
-            <span class="badge-item" id="header-username">Warrior</span>
-            <span class="badge-item badge-xp" id="header-points">0 XP</span>
-            <span class="badge-item badge-coin" id="header-coins">0 🪙</span>
-            <span class="badge-item badge-streak" id="header-streak">🔥 1d</span>
-            <button class="btn-logout" onclick="window.app.logout()" title="Logout">🚪 Logout</button>
+        <div style="display: flex; align-items: center; gap: 0.8rem;">
+            <button class="btn-primary" id="header-login-btn" style="padding: 0.45rem 1rem; font-size: 0.85rem;" onclick="window.app.showAuthModal('login')">
+                🔑 Login / Register
+            </button>
+
+            <div class="user-badge-wrap hidden" id="header-user-badge">
+                <span class="badge-item" id="header-username">Warrior</span>
+                <span class="badge-item badge-xp" id="header-points">0 XP</span>
+                <span class="badge-item badge-coin" id="header-coins">0 🪙</span>
+                <span class="badge-item badge-streak" id="header-streak">🔥 1d</span>
+                <button class="btn-logout" onclick="window.app.logout()" title="Logout">🚪 Logout</button>
+            </div>
         </div>
     </header>
 
@@ -51,7 +57,7 @@
         <section id="view-dashboard" class="app-view active">
             <div class="glass-card hero-metric-card">
                 <div>
-                    <h1 id="dash-user-greeting" style="font-family: var(--font-heading); font-size: 1.8rem; margin-bottom: 0.4rem; color: var(--text-primary);">Welcome! 👋</h1>
+                    <h1 id="dash-user-greeting" style="font-family: var(--font-heading); font-size: 1.8rem; margin-bottom: 0.4rem; color: var(--text-primary);">Welcome Warrior! 👋</h1>
                     <p style="color: var(--text-secondary); max-width: 600px; line-height: 1.5;">
                         Your fitness statistics and personalized AI training blueprint are ready. Choose a battle mode or complete daily camera quests to level up!
                     </p>
@@ -158,7 +164,7 @@
                         <div style="font-size: 2.2rem; margin-bottom: 0.4rem;">🎲</div>
                         <h3 style="font-family: var(--font-heading); font-size: 1.2rem; color: var(--text-primary);">Random Arena</h3>
                         <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0.5rem 0 1rem 0; line-height: 1.4;">
-                            Instantly matches you with any online opponent worldwide who also entered Random Arena, or a smart AI opponent!
+                            Searches for online players in your age division (10s), expands to all ages, or connects an AI rival!
                         </p>
                     </div>
                     <button class="btn-primary" style="width: 100%;" onclick="window.app.startRandomArena()">

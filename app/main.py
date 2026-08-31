@@ -15,7 +15,7 @@ from .chatbot import FitnessCoachChatbot
 from .exercises import get_all_exercises, get_exercise_by_id
 from .battle_manager import battle_manager
 
-app = FastAPI(title="FITBAT - Fitness Battles", version="1.2.0")
+app = FastAPI(title="FITBAT - Fitness Battles", version="1.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -75,14 +75,17 @@ class TaskCompleteRequest(BaseModel):
     task_id: int
     progress: float
 
+def get_optional_user(authorization: Optional[str] = Header(None)) -> Optional[dict]:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.split(" ")[1]
+    return get_current_user_from_token(token)
+
 def get_current_user(authorization: Optional[str] = Header(None)):
-    token = None
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ")[1]
-    user_session = get_current_user_from_token(token)
-    if not user_session:
+    user = get_optional_user(authorization)
+    if not user:
         raise HTTPException(status_code=401, detail="Unauthorized session. Please login.")
-    return user_session
+    return user
 
 # --- API Routes ---
 
@@ -231,15 +234,21 @@ def list_exercises():
 def get_exercise(exercise_id: str):
     return {"exercise": get_exercise_by_id(exercise_id)}
 
+# Works for both logged-in users AND guests (Never returns 401!)
 @app.get("/api/tasks/daily")
-def get_daily_tasks(user: dict = Depends(get_current_user)):
+def get_daily_tasks(user: Optional[dict] = Depends(get_optional_user)):
     conn = get_db_connection()
     cursor = conn.cursor()
     today_str = date.today().isoformat()
 
-    cursor.execute("SELECT age FROM profiles WHERE user_id = ?", (user["user_id"],))
-    prof = cursor.fetchone()
-    user_age = prof["age"] if prof else 22
+    user_age = 22
+    user_id = None
+    if user:
+        user_id = user["user_id"]
+        cursor.execute("SELECT age FROM profiles WHERE user_id = ?", (user_id,))
+        prof = cursor.fetchone()
+        if prof:
+            user_age = prof["age"]
 
     cursor.execute("""
     SELECT * FROM daily_tasks WHERE min_age <= ? AND max_age >= ?
@@ -248,10 +257,16 @@ def get_daily_tasks(user: dict = Depends(get_current_user)):
 
     result = []
     for t in tasks:
-        cursor.execute("""
-        SELECT progress, completed FROM user_tasks WHERE user_id = ? AND task_id = ? AND date_str = ?
-        """, (user["user_id"], t["id"], today_str))
-        user_t = cursor.fetchone()
+        progress = 0
+        completed = False
+        if user_id:
+            cursor.execute("""
+            SELECT progress, completed FROM user_tasks WHERE user_id = ? AND task_id = ? AND date_str = ?
+            """, (user_id, t["id"], today_str))
+            user_t = cursor.fetchone()
+            if user_t:
+                progress = user_t["progress"]
+                completed = bool(user_t["completed"])
         
         result.append({
             "id": t["id"],
@@ -263,15 +278,15 @@ def get_daily_tasks(user: dict = Depends(get_current_user)):
             "unit": t["unit"],
             "xp_reward": t["xp_reward"],
             "coin_reward": t["coin_reward"],
-            "progress": user_t["progress"] if user_t else 0,
-            "completed": bool(user_t["completed"]) if user_t else False
+            "progress": progress,
+            "completed": completed
         })
 
     conn.close()
     return {"tasks": result, "date": today_str}
 
 @app.post("/api/tasks/complete")
-def complete_task(req: TaskCompleteRequest, user: dict = Depends(get_current_user)):
+def complete_task(req: TaskCompleteRequest, user: Optional[dict] = Depends(get_optional_user)):
     conn = get_db_connection()
     cursor = conn.cursor()
     today_str = date.today().isoformat()
@@ -283,29 +298,29 @@ def complete_task(req: TaskCompleteRequest, user: dict = Depends(get_current_use
         raise HTTPException(status_code=404, detail="Task not found")
 
     is_complete = req.progress >= task["target_value"]
-    
-    cursor.execute("""
-    SELECT completed FROM user_tasks WHERE user_id = ? AND task_id = ? AND date_str = ?
-    """, (user["user_id"], req.task_id, today_str))
-    existing = cursor.fetchone()
+    xp_awarded = task["xp_reward"] if is_complete else 0
+    coins_awarded = task["coin_reward"] if is_complete else 0
 
-    already_awarded = existing and existing["completed"] == 1
-
-    cursor.execute("""
-    INSERT OR REPLACE INTO user_tasks (user_id, task_id, progress, completed, date_str)
-    VALUES (?, ?, ?, ?, ?)
-    """, (user["user_id"], req.task_id, req.progress, 1 if is_complete else 0, today_str))
-
-    xp_awarded = 0
-    coins_awarded = 0
-    if is_complete and not already_awarded:
-        xp_awarded = task["xp_reward"]
-        coins_awarded = task["coin_reward"]
+    if user:
+        user_id = user["user_id"]
         cursor.execute("""
-        UPDATE users SET xp = xp + ?, points = points + ?, coins = coins + ? WHERE id = ?
-        """, (xp_awarded, xp_awarded, coins_awarded, user["user_id"]))
+        SELECT completed FROM user_tasks WHERE user_id = ? AND task_id = ? AND date_str = ?
+        """, (user_id, req.task_id, today_str))
+        existing = cursor.fetchone()
+        already_awarded = existing and existing["completed"] == 1
 
-    conn.commit()
+        cursor.execute("""
+        INSERT OR REPLACE INTO user_tasks (user_id, task_id, progress, completed, date_str)
+        VALUES (?, ?, ?, ?, ?)
+        """, (user_id, req.task_id, req.progress, 1 if is_complete else 0, today_str))
+
+        if is_complete and not already_awarded:
+            cursor.execute("""
+            UPDATE users SET xp = xp + ?, points = points + ?, coins = coins + ? WHERE id = ?
+            """, (xp_awarded, xp_awarded, coins_awarded, user_id))
+
+        conn.commit()
+
     conn.close()
     return {
         "success": True,
@@ -315,51 +330,55 @@ def complete_task(req: TaskCompleteRequest, user: dict = Depends(get_current_use
     }
 
 @app.post("/api/activity/log")
-def log_activity(req: ActivityLogRequest, user: dict = Depends(get_current_user)):
+def log_activity(req: ActivityLogRequest, user: Optional[dict] = Depends(get_optional_user)):
     conn = get_db_connection()
     cursor = conn.cursor()
     today_str = date.today().isoformat()
+    total_steps = req.steps
 
-    cursor.execute("""
-    INSERT INTO activity_logs (user_id, date_str, steps, distance_km, calories_burned, active_minutes)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id, date_str) DO UPDATE SET
-        steps = steps + excluded.steps,
-        distance_km = distance_km + excluded.distance_km,
-        calories_burned = calories_burned + excluded.calories_burned,
-        active_minutes = active_minutes + excluded.active_minutes
-    """, (user["user_id"], today_str, req.steps, req.distance_km, req.calories_burned, req.active_minutes))
+    if user:
+        user_id = user["user_id"]
+        cursor.execute("""
+        INSERT INTO activity_logs (user_id, date_str, steps, distance_km, calories_burned, active_minutes)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, date_str) DO UPDATE SET
+            steps = steps + excluded.steps,
+            distance_km = distance_km + excluded.distance_km,
+            calories_burned = calories_burned + excluded.calories_burned,
+            active_minutes = active_minutes + excluded.active_minutes
+        """, (user_id, today_str, req.steps, req.distance_km, req.calories_burned, req.active_minutes))
 
-    cursor.execute("SELECT steps FROM activity_logs WHERE user_id = ? AND date_str = ?", (user["user_id"], today_str))
-    row = cursor.fetchone()
-    total_steps = row["steps"] if row else req.steps
+        cursor.execute("SELECT steps FROM activity_logs WHERE user_id = ? AND date_str = ?", (user_id, today_str))
+        row = cursor.fetchone()
+        if row:
+            total_steps = row["steps"]
 
-    cursor.execute("SELECT id, target_value, xp_reward, coin_reward FROM daily_tasks WHERE category = 'walking'")
-    walking_task = cursor.fetchone()
-    if walking_task:
-        if total_steps >= walking_task["target_value"]:
+        cursor.execute("SELECT id, target_value, xp_reward, coin_reward FROM daily_tasks WHERE category = 'walking'")
+        walking_task = cursor.fetchone()
+        if walking_task and total_steps >= walking_task["target_value"]:
             cursor.execute("""
             INSERT OR REPLACE INTO user_tasks (user_id, task_id, progress, completed, date_str)
             VALUES (?, ?, ?, 1, ?)
-            """, (user["user_id"], walking_task["id"], total_steps, today_str))
+            """, (user_id, walking_task["id"], total_steps, today_str))
 
-    conn.commit()
+        conn.commit()
+
     conn.close()
     return {"success": True, "total_steps": total_steps}
 
 @app.get("/api/activity/today")
-def get_today_activity(user: dict = Depends(get_current_user)):
-    conn = get_db_connection()
-    cursor = conn.cursor()
+def get_today_activity(user: Optional[dict] = Depends(get_optional_user)):
     today_str = date.today().isoformat()
-
-    cursor.execute("SELECT * FROM activity_logs WHERE user_id = ? AND date_str = ?", (user["user_id"], today_str))
-    row = cursor.fetchone()
-    conn.close()
-    if row:
-        return dict(row)
+    if user:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM activity_logs WHERE user_id = ? AND date_str = ?", (user["user_id"], today_str))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
     return {
-        "user_id": user["user_id"],
+        "user_id": 0,
         "date_str": today_str,
         "steps": 0,
         "distance_km": 0.0,
@@ -368,23 +387,27 @@ def get_today_activity(user: dict = Depends(get_current_user)):
     }
 
 @app.post("/api/chatbot/message")
-def chat_with_coach(req: ChatRequest, user: dict = Depends(get_current_user)):
+def chat_with_coach(req: ChatRequest, user: Optional[dict] = Depends(get_optional_user)):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM profiles WHERE user_id = ?", (user["user_id"],))
-    profile = cursor.fetchone()
-    user_prof = dict(profile) if profile else None
+    user_prof = None
+    if user:
+        cursor.execute("SELECT * FROM profiles WHERE user_id = ?", (user["user_id"],))
+        profile = cursor.fetchone()
+        if profile:
+            user_prof = dict(profile)
 
     reply = FitnessCoachChatbot.answer(req.message, user_prof)
 
-    now_str = datetime.now().isoformat()
-    cursor.execute("""
-    INSERT INTO chat_history (user_id, sender, message, timestamp)
-    VALUES (?, 'user', ?, ?), (?, 'coach', ?, ?)
-    """, (user["user_id"], req.message, now_str, user["user_id"], reply, now_str))
+    if user:
+        now_str = datetime.now().isoformat()
+        cursor.execute("""
+        INSERT INTO chat_history (user_id, sender, message, timestamp)
+        VALUES (?, 'user', ?, ?), (?, 'coach', ?, ?)
+        """, (user["user_id"], req.message, now_str, user["user_id"], reply, now_str))
+        conn.commit()
 
-    conn.commit()
     conn.close()
     return {"reply": reply}
 
@@ -466,14 +489,13 @@ def get_battle_history(user: dict = Depends(get_current_user)):
     conn.close()
     return {"history": [dict(r) for r in rows]}
 
-# --- Real-time WebSocket Battle Arena (Supports Authenticated & Guest Mobile Users) ---
+# --- Real-time WebSocket Battle Arena ---
 @app.websocket("/ws/battle")
 async def websocket_battle_endpoint(websocket: WebSocket, token: Optional[str] = None, exercise_id: str = "pushups", 
                                     age_group: str = "Prime (20-29)", room_code: Optional[str] = None, 
                                     force_ai: bool = False):
     session = get_current_user_from_token(token) if token else None
     
-    # If not logged in or joining as a guest from mobile, generate guest session so battle never fails!
     if not session:
         guest_id = random.randint(50000, 99999)
         guest_name = f"Warrior_{random.randint(100, 999)}"
