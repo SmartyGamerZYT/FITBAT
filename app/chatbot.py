@@ -285,6 +285,7 @@ Rules:
 
         # Workout knowledge
         knowledge = {
+            "frog": "🐸 **Frog Jump Mastery**: Start in an athletic stance. Drop into a deep squat touching your fingers near the floor, then explosively leap vertically upwards extending your hips, knees, and ankles. Land softly on the balls of your feet and absorb immediately into the next deep crouch!",
             "pushup": "\U0001f4a5 **Pushup Mastery**: Get into a full horizontal plank on the floor. Hands shoulder-width apart, lower chest until elbows hit 90\u00b0, then push to full lockout. Keep core tight \u2014 no hip sagging or piking!",
             "squat": "\U0001f9b5 **Squat Form**: Feet shoulder-width, toes out 15-30\u00b0. Sit hips back and down, knees track over toes, chest stays upright. Drive up through heels!",
             "plank": "\U0001f6e1\ufe0f **Plank Hold**: Straight line from head to heels. Squeeze glutes, brace core. Don't let lower back arch. Breathe steadily!",

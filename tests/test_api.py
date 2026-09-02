@@ -11,7 +11,8 @@ class TestFitbatAPI(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertIn("exercises", data)
-        self.assertEqual(len(data["exercises"]), 12)
+        self.assertEqual(len(data["exercises"]), 13)
+        self.assertEqual(data["exercises"][0]["id"], "frog_jumps")
 
     def test_register_and_login_flow(self):
         import time

@@ -22,10 +22,12 @@ class TestFitbat(unittest.TestCase):
         self.assertGreater(user_cnt, 0)
         conn.close()
 
-    def test_all_12_exercises(self):
+    def test_all_13_exercises(self):
         exercises = get_all_exercises()
-        self.assertEqual(len(exercises), 12)
+        self.assertEqual(len(exercises), 13)
+        self.assertEqual(exercises[0]["id"], "frog_jumps")
         ex_ids = [e["id"] for e in exercises]
+        self.assertIn("frog_jumps", ex_ids)
         self.assertIn("pushups", ex_ids)
         self.assertIn("squats", ex_ids)
         self.assertIn("jumping_jacks", ex_ids)

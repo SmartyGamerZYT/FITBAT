@@ -1,6 +1,19 @@
 from typing import Dict, List, Any
 
 EXERCISES_DATABASE: Dict[str, Dict[str, Any]] = {
+    "frog_jumps": {
+        "id": "frog_jumps",
+        "name": "Frog Jumps",
+        "category": "Plyometrics & Explosive Power",
+        "target_muscles": ["Quadriceps", "Glutes", "Hamstrings", "Calves", "Core"],
+        "icon": "🐸",
+        "difficulty": "Medium - Hard",
+        "cv_primary_joints": ["Hip", "Knee", "Ankle"],
+        "angle_down_threshold": 90,
+        "angle_up_threshold": 160,
+        "instructions": "Drop into a deep squat touching your fingers towards the floor, then explode up into the air and land softly back in a deep squat.",
+        "form_tips": "Ensure a full deep crouch before jumping; land gently on the balls of your feet and absorb into a squat."
+    },
     "pushups": {
         "id": "pushups",
         "name": "Pushups",
@@ -163,4 +176,4 @@ def get_all_exercises() -> List[Dict[str, Any]]:
     return list(EXERCISES_DATABASE.values())
 
 def get_exercise_by_id(exercise_id: str) -> Dict[str, Any]:
-    return EXERCISES_DATABASE.get(exercise_id, EXERCISES_DATABASE["pushups"])
+    return EXERCISES_DATABASE.get(exercise_id, EXERCISES_DATABASE["frog_jumps"])

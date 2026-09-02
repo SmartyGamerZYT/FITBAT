@@ -225,7 +225,7 @@ def init_db():
             """, (uid, 24, "Other", 178, 74, "Advanced", "Muscle Gain", "Very Active", 88.5, 23.4, 1750, 2600, 14.2, 2600, datetime.now().isoformat()))
 
             # Exercise stats for bots
-            exercises = ["pushups", "squats", "jumping_jacks", "bicep_curls", "lunges", "high_knees", "plank", "shoulder_press", "crunches", "mountain_climbers", "lateral_raises", "shadow_boxing"]
+            exercises = ["frog_jumps", "pushups", "squats", "jumping_jacks", "bicep_curls", "lunges", "high_knees", "plank", "shoulder_press", "crunches", "mountain_climbers", "lateral_raises", "shadow_boxing"]
             import random
             for ex in exercises:
                 reps = random.randint(35, 120)

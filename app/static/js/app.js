@@ -5,7 +5,7 @@ class FitbatApp {
         this.currentUser = null;
         this.currentMetrics = null;
         this.exercises = [];
-        this.selectedExercise = "pushups";
+        this.selectedExercise = "frog_jumps";
         this.selectedAgeGroup = "Prime (20-29)";
         this.activeQuest = null;
         this.questReps = 0;
