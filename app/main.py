@@ -96,6 +96,37 @@ def get_current_user(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="Unauthorized session. Please login.")
     return user
 
+def get_or_create_guest_user(guest_id: Optional[int] = None) -> dict:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    target_id = guest_id or 999999
+    
+    try:
+        cursor.execute("SELECT id, username FROM users WHERE id = ?", (target_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            now_str = datetime.now().isoformat()
+            cursor.execute("""
+            INSERT OR IGNORE INTO users (id, username, email, password_hash, points, xp, coins, streak, level, created_at)
+            VALUES (?, 'GuestWarrior', 'guest@fitbat.ai', 'guest_hash', 100, 100, 100, 1, 1, ?)
+            """, (target_id, now_str))
+            cursor.execute("""
+            INSERT OR IGNORE INTO profiles (user_id, age, gender, height_cm, weight_kg, fitness_level, primary_goal, activity_level, fitness_score, bmi, bmr, tdee, body_fat_pct, daily_calorie_target, updated_at)
+            VALUES (?, 23, 'Other', 175, 70, 'Intermediate', 'Fitness', 'Moderately Active', 78.0, 22.8, 1650, 2200, 18.0, 2100, ?)
+            """, (target_id, now_str))
+            conn.commit()
+            cursor.execute("SELECT id, username FROM users WHERE id = ?", (target_id,))
+            user = cursor.fetchone()
+        
+        uid = user["id"] if user else target_id
+        uname = user["username"] if user else "GuestWarrior"
+        conn.close()
+        return {"user_id": uid, "username": uname}
+    except Exception as e:
+        if conn: conn.close()
+        return {"user_id": target_id, "username": "GuestWarrior"}
+
 # --- API Routes ---
 
 @app.get("/")
@@ -344,49 +375,51 @@ def log_activity(req: ActivityLogRequest, user: Optional[dict] = Depends(get_opt
     today_str = date.today().isoformat()
     total_steps = req.steps
 
-    if user:
-        user_id = user["user_id"]
+    effective_user = user or get_or_create_guest_user()
+    user_id = effective_user["user_id"]
+
+    cursor.execute("""
+    INSERT INTO activity_logs (user_id, date_str, steps, distance_km, calories_burned, active_minutes)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, date_str) DO UPDATE SET
+        steps = steps + excluded.steps,
+        distance_km = distance_km + excluded.distance_km,
+        calories_burned = calories_burned + excluded.calories_burned,
+        active_minutes = active_minutes + excluded.active_minutes
+    """, (user_id, today_str, req.steps, req.distance_km, req.calories_burned, req.active_minutes))
+
+    cursor.execute("SELECT steps FROM activity_logs WHERE user_id = ? AND date_str = ?", (user_id, today_str))
+    row = cursor.fetchone()
+    if row:
+        total_steps = row["steps"]
+
+    cursor.execute("SELECT id, target_value, xp_reward, coin_reward FROM daily_tasks WHERE category = 'walking'")
+    walking_task = cursor.fetchone()
+    if walking_task and total_steps >= walking_task["target_value"]:
         cursor.execute("""
-        INSERT INTO activity_logs (user_id, date_str, steps, distance_km, calories_burned, active_minutes)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(user_id, date_str) DO UPDATE SET
-            steps = steps + excluded.steps,
-            distance_km = distance_km + excluded.distance_km,
-            calories_burned = calories_burned + excluded.calories_burned,
-            active_minutes = active_minutes + excluded.active_minutes
-        """, (user_id, today_str, req.steps, req.distance_km, req.calories_burned, req.active_minutes))
+        INSERT OR REPLACE INTO user_tasks (user_id, task_id, progress, completed, date_str)
+        VALUES (?, ?, ?, 1, ?)
+        """, (user_id, walking_task["id"], total_steps, today_str))
 
-        cursor.execute("SELECT steps FROM activity_logs WHERE user_id = ? AND date_str = ?", (user_id, today_str))
-        row = cursor.fetchone()
-        if row:
-            total_steps = row["steps"]
-
-        cursor.execute("SELECT id, target_value, xp_reward, coin_reward FROM daily_tasks WHERE category = 'walking'")
-        walking_task = cursor.fetchone()
-        if walking_task and total_steps >= walking_task["target_value"]:
-            cursor.execute("""
-            INSERT OR REPLACE INTO user_tasks (user_id, task_id, progress, completed, date_str)
-            VALUES (?, ?, ?, 1, ?)
-            """, (user_id, walking_task["id"], total_steps, today_str))
-
-        conn.commit()
-
+    conn.commit()
     conn.close()
     return {"success": True, "total_steps": total_steps}
 
 @app.get("/api/activity/today")
 def get_today_activity(user: Optional[dict] = Depends(get_optional_user)):
     today_str = date.today().isoformat()
-    if user:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM activity_logs WHERE user_id = ? AND date_str = ?", (user["user_id"], today_str))
-        row = cursor.fetchone()
-        conn.close()
-        if row:
-            return dict(row)
+    effective_user = user or get_or_create_guest_user()
+    user_id = effective_user["user_id"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM activity_logs WHERE user_id = ? AND date_str = ?", (user_id, today_str))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
     return {
-        "user_id": 0,
+        "user_id": user_id,
         "date_str": today_str,
         "steps": 0,
         "distance_km": 0.0,
@@ -399,39 +432,40 @@ def chat_with_coach(req: ChatRequest, user: Optional[dict] = Depends(get_optiona
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    effective_user = user or get_or_create_guest_user()
+    user_id = effective_user["user_id"]
     user_prof = None
     daily_nutrition = None
     today_str = date.today().isoformat()
 
-    if user:
-        cursor.execute("SELECT * FROM profiles WHERE user_id = ?", (user["user_id"],))
-        profile = cursor.fetchone()
-        if profile:
-            user_prof = dict(profile)
+    cursor.execute("SELECT * FROM profiles WHERE user_id = ?", (user_id,))
+    profile = cursor.fetchone()
+    if profile:
+        user_prof = dict(profile)
 
-        # Get today's nutrition totals
-        try:
-            cursor.execute("""
-            SELECT COALESCE(SUM(estimated_calories), 0) as total_cal,
-                   COALESCE(SUM(protein_g), 0) as total_p,
-                   COALESCE(SUM(carbs_g), 0) as total_c,
-                   COALESCE(SUM(fats_g), 0) as total_f,
-                   COALESCE(SUM(water_glasses), 0) as water
-            FROM nutrition_logs WHERE user_id = ? AND date_str = ?
-            """, (user["user_id"], today_str))
-            row = cursor.fetchone()
-            if row:
-                daily_nutrition = dict(row)
-        except Exception:
-            pass
+    # Get today's nutrition totals
+    try:
+        cursor.execute("""
+        SELECT COALESCE(SUM(estimated_calories), 0) as total_cal,
+               COALESCE(SUM(protein_g), 0) as total_p,
+               COALESCE(SUM(carbs_g), 0) as total_c,
+               COALESCE(SUM(fats_g), 0) as total_f,
+               COALESCE(SUM(water_glasses), 0) as water
+        FROM nutrition_logs WHERE user_id = ? AND date_str = ?
+        """, (user_id, today_str))
+        row = cursor.fetchone()
+        if row:
+            daily_nutrition = dict(row)
+    except Exception:
+        pass
 
     # Get chatbot response (returns dict with reply + food_data)
     result = FitnessCoachChatbot.answer_with_data(req.message, user_prof, daily_nutrition)
     reply = result["reply"]
     food_data = result.get("food_data")
 
-    # If food was detected, auto-log it to nutrition_logs
-    if user and food_data:
+    # If food was detected, auto-log it to nutrition_logs in database
+    if food_data:
         now_str = datetime.now().isoformat()
         hour = datetime.now().hour
         if hour < 11:
@@ -448,7 +482,7 @@ def chat_with_coach(req: ChatRequest, user: Optional[dict] = Depends(get_optiona
             INSERT INTO nutrition_logs (user_id, date_str, meal_type, food_description,
                 estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (user["user_id"], today_str, meal_type, req.message,
+            """, (user_id, today_str, meal_type, req.message,
                   food_data.get("total_calories", 0),
                   food_data.get("total_protein", 0),
                   food_data.get("total_carbs", 0),
@@ -458,60 +492,82 @@ def chat_with_coach(req: ChatRequest, user: Optional[dict] = Depends(get_optiona
         except Exception:
             pass
 
-    if user:
-        now_str = datetime.now().isoformat()
+    now_str = datetime.now().isoformat()
+    try:
         cursor.execute("""
         INSERT INTO chat_history (user_id, sender, message, timestamp)
         VALUES (?, 'user', ?, ?), (?, 'coach', ?, ?)
-        """, (user["user_id"], req.message, now_str, user["user_id"], reply, now_str))
+        """, (user_id, req.message, now_str, user_id, reply, now_str))
+    except Exception:
+        pass
 
     conn.commit()
     conn.close()
     return {"reply": reply}
+
+@app.post("/api/nutrition/log")
+def log_nutrition_item(req: NutritionLogRequest, user: Optional[dict] = Depends(get_optional_user)):
+    effective_user = user or get_or_create_guest_user()
+    user_id = effective_user["user_id"]
+    today_str = date.today().isoformat()
+    now_str = datetime.now().isoformat()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO nutrition_logs (user_id, date_str, meal_type, food_description,
+        estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, today_str, req.meal_type, req.food_description,
+          req.estimated_calories, req.protein_g, req.carbs_g, req.fats_g, req.water_glasses, now_str))
+    conn.commit()
+    conn.close()
+    return {"success": True, "message": "Logged successfully to database"}
 
 @app.get("/api/nutrition/today")
 def get_today_nutrition(user: Optional[dict] = Depends(get_optional_user)):
     conn = get_db_connection()
     cursor = conn.cursor()
     today_str = date.today().isoformat()
+    effective_user = user or get_or_create_guest_user()
+    user_id = effective_user["user_id"]
 
     totals = {"total_calories": 0, "total_protein": 0, "total_carbs": 0, "total_fats": 0, "total_water": 0}
     meals = []
     calorie_target = 2100
 
-    if user:
-        try:
-            cursor.execute("""
-            SELECT COALESCE(SUM(estimated_calories), 0) as total_calories,
-                   COALESCE(SUM(protein_g), 0) as total_protein,
-                   COALESCE(SUM(carbs_g), 0) as total_carbs,
-                   COALESCE(SUM(fats_g), 0) as total_fats,
-                   COALESCE(SUM(water_glasses), 0) as total_water
-            FROM nutrition_logs WHERE user_id = ? AND date_str = ?
-            """, (user["user_id"], today_str))
-            row = cursor.fetchone()
-            if row:
-                totals = dict(row)
-        except Exception:
-            pass
+    try:
+        cursor.execute("""
+        SELECT COALESCE(SUM(estimated_calories), 0) as total_calories,
+               COALESCE(SUM(protein_g), 0) as total_protein,
+               COALESCE(SUM(carbs_g), 0) as total_carbs,
+               COALESCE(SUM(fats_g), 0) as total_fats,
+               COALESCE(SUM(water_glasses), 0) as total_water
+        FROM nutrition_logs WHERE user_id = ? AND date_str = ?
+        """, (user_id, today_str))
+        row = cursor.fetchone()
+        if row:
+            totals = dict(row)
+    except Exception:
+        pass
 
-        try:
-            cursor.execute("""
-            SELECT meal_type, food_description, estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp
-            FROM nutrition_logs WHERE user_id = ? AND date_str = ?
-            ORDER BY timestamp ASC
-            """, (user["user_id"], today_str))
-            meals = [dict(r) for r in cursor.fetchall()]
-        except Exception:
-            pass
+    try:
+        cursor.execute("""
+        SELECT meal_type, food_description, estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp
+        FROM nutrition_logs WHERE user_id = ? AND date_str = ?
+        ORDER BY timestamp ASC
+        """, (user_id, today_str))
+        meals = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        pass
 
-        try:
-            cursor.execute("SELECT daily_calorie_target FROM profiles WHERE user_id = ?", (user["user_id"],))
-            profile = cursor.fetchone()
-            if profile and profile["daily_calorie_target"]:
-                calorie_target = profile["daily_calorie_target"]
-        except Exception:
-            pass
+    try:
+        cursor.execute("SELECT daily_calorie_target FROM profiles WHERE user_id = ?", (user_id,))
+        profile = cursor.fetchone()
+        if profile and profile["daily_calorie_target"]:
+            calorie_target = profile["daily_calorie_target"]
+    except Exception:
+        pass
 
     conn.close()
     return {
@@ -524,14 +580,15 @@ def get_today_nutrition(user: Optional[dict] = Depends(get_optional_user)):
 @app.post("/api/nutrition/reset")
 @app.delete("/api/nutrition/today")
 def reset_today_nutrition(user: Optional[dict] = Depends(get_optional_user)):
-    if user:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        today_str = date.today().isoformat()
-        cursor.execute("DELETE FROM nutrition_logs WHERE user_id = ? AND date_str = ?", (user["user_id"], today_str))
-        conn.commit()
-        conn.close()
-    return {"status": "success", "message": "Today's nutrition log has been reset to 0."}
+    effective_user = user or get_or_create_guest_user()
+    user_id = effective_user["user_id"]
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    today_str = date.today().isoformat()
+    cursor.execute("DELETE FROM nutrition_logs WHERE user_id = ? AND date_str = ?", (user_id, today_str))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "Today's nutrition log has been reset to 0 in database."}
 
 
 @app.get("/api/leaderboard/global")
@@ -620,9 +677,7 @@ async def websocket_battle_endpoint(websocket: WebSocket, token: Optional[str] =
     session = get_current_user_from_token(token) if token else None
     
     if not session:
-        guest_id = random.randint(50000, 99999)
-        guest_name = f"Warrior_{random.randint(100, 999)}"
-        session = {"user_id": guest_id, "username": guest_name}
+        session = get_or_create_guest_user()
 
     user_id = session["user_id"]
     username = session["username"]

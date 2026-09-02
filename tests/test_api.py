@@ -94,5 +94,31 @@ class TestFitbatAPI(unittest.TestCase):
         self.assertEqual(ex_lead_res.status_code, 200)
         self.assertGreater(len(ex_lead_res.json()["leaderboard"]), 0)
 
+        # 9. Test Real-time Step Activity Logging in Database
+        act_log = self.client.post("/api/activity/log", json={
+            "steps": 125,
+            "distance_km": 0.093,
+            "calories_burned": 5.0,
+            "active_minutes": 2
+        }, headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(act_log.status_code, 200)
+        self.assertGreaterEqual(act_log.json()["total_steps"], 125)
+
+        # 10. Test Health Monitor Nutrition Logging in Database
+        nut_log = self.client.post("/api/nutrition/log", json={
+            "meal_type": "breakfast",
+            "food_description": "2 eggs and oats",
+            "estimated_calories": 306,
+            "protein_g": 17,
+            "carbs_g": 28,
+            "fats_g": 12,
+            "water_glasses": 1
+        }, headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(nut_log.status_code, 200)
+
+        today_nut = self.client.get("/api/nutrition/today", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(today_nut.status_code, 200)
+        self.assertGreaterEqual(today_nut.json()["totals"]["total_calories"], 300)
+
 if __name__ == "__main__":
     unittest.main()

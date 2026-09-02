@@ -9,6 +9,16 @@ class FitbatApp {
         this.selectedAgeGroup = "Prime (20-29)";
         this.activeQuest = null;
         this.questReps = 0;
+        this.isPedometerActive = false;
+        this.pedometerStepsUnsynced = 0;
+        this.lastStepTime = 0;
+        this.recentStepTimes = [];
+        this.motionHandler = null;
+        this.liveSteps = 0;
+        this.liveDistance = 0.0;
+        this.liveCalories = 0.0;
+        this.liveActiveMin = 0;
+        this.lastAccMag = 9.8;
     }
 
     async init() {
@@ -464,18 +474,197 @@ class FitbatApp {
             const res = await fetch("/api/activity/today", { headers });
             const act = await res.json();
             
-            document.getElementById("act-steps-count").textContent = (act.steps || 0).toLocaleString();
-            document.getElementById("act-distance").textContent = `${(act.distance_km || 0).toFixed(2)} km`;
-            document.getElementById("act-calories").textContent = `${Math.round(act.calories_burned || 0)} kcal`;
-            document.getElementById("act-active-min").textContent = `${act.active_minutes || 0} min`;
+            this.liveSteps = act.steps || 0;
+            this.liveDistance = act.distance_km || 0.0;
+            this.liveCalories = act.calories_burned || 0.0;
+            this.liveActiveMin = act.active_minutes || 0;
 
-            const target = 8000;
-            const pct = Math.min(100, Math.round(((act.steps || 0) / target) * 100));
-            document.getElementById("act-step-pct").textContent = `${pct}% of 8,000 goal`;
-            const fill = document.getElementById("step-progress-bar");
-            if (fill) fill.style.width = `${pct}%`;
+            this.updateActivityUI();
         } catch (e) {
             console.error("Failed to load activity", e);
+        }
+    }
+
+    updateActivityUI() {
+        const stepsEl = document.getElementById("act-steps-count");
+        const distEl = document.getElementById("act-distance");
+        const calEl = document.getElementById("act-calories");
+        const minEl = document.getElementById("act-active-min");
+        const pctEl = document.getElementById("act-step-pct");
+        const fillEl = document.getElementById("step-progress-bar");
+
+        if (stepsEl) stepsEl.textContent = this.liveSteps.toLocaleString();
+        if (distEl) distEl.textContent = `${this.liveDistance.toFixed(2)} km`;
+        if (calEl) calEl.textContent = `${Math.round(this.liveCalories)} kcal`;
+        if (minEl) minEl.textContent = `${this.liveActiveMin} min`;
+
+        const target = 8000;
+        const pct = Math.min(100, Math.round((this.liveSteps / target) * 100));
+        if (pctEl) pctEl.textContent = `${pct}% of 8,000 daily goal`;
+        if (fillEl) fillEl.style.width = `${pct}%`;
+    }
+
+    async toggleRealtimePedometer() {
+        if (this.isPedometerActive) {
+            this.stopRealtimePedometer();
+        } else {
+            await this.startRealtimePedometer();
+        }
+    }
+
+    async startRealtimePedometer() {
+        // Request motion sensor permission for iOS 13+ devices
+        if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+            try {
+                const response = await DeviceMotionEvent.requestPermission();
+                if (response !== "granted") {
+                    alert("Permission to access motion sensors was denied. You can still log steps using the quick walk buttons.");
+                    return;
+                }
+            } catch (err) {
+                console.warn("DeviceMotionEvent permission request error:", err);
+            }
+        }
+
+        this.isPedometerActive = true;
+        this.pedometerStepsUnsynced = 0;
+        this.recentStepTimes = [];
+        this.lastStepTime = Date.now();
+
+        const badge = document.getElementById("pedometer-badge");
+        const btn = document.getElementById("btn-toggle-pedometer");
+        if (badge) {
+            badge.textContent = "🟢 Live Sensor Active";
+            badge.style.background = "#dcfce7";
+            badge.style.color = "#15803d";
+        }
+        if (btn) {
+            btn.textContent = "⏸️ Pause Real-Time Sensor";
+            btn.style.background = "var(--coral)";
+        }
+
+        this.motionHandler = (event) => this.handleDeviceMotion(event);
+        window.addEventListener("devicemotion", this.motionHandler);
+
+        console.log("[Pedometer] Real-time accelerometer step tracker started.");
+    }
+
+    stopRealtimePedometer() {
+        this.isPedometerActive = false;
+        if (this.motionHandler) {
+            window.removeEventListener("devicemotion", this.motionHandler);
+            this.motionHandler = null;
+        }
+
+        const badge = document.getElementById("pedometer-badge");
+        const btn = document.getElementById("btn-toggle-pedometer");
+        const cadEl = document.getElementById("act-cadence");
+        if (badge) {
+            badge.textContent = "⚪ Sensor Standby";
+            badge.style.background = "#f1f5f9";
+            badge.style.color = "var(--text-secondary)";
+        }
+        if (btn) {
+            btn.textContent = "▶️ Start Real-Time Sensor";
+            btn.style.background = "";
+        }
+        if (cadEl) cadEl.textContent = "0 steps/min";
+
+        // Flush any unsynced steps to the database
+        if (this.pedometerStepsUnsynced > 0) {
+            this.syncStepsToDatabase();
+        }
+
+        console.log("[Pedometer] Real-time accelerometer step tracker stopped.");
+    }
+
+    handleDeviceMotion(event) {
+        if (!this.isPedometerActive) return;
+
+        const acc = event.accelerationIncludingGravity || event.acceleration;
+        if (!acc) return;
+
+        const x = acc.x || 0;
+        const y = acc.y || 0;
+        const z = acc.z || 0;
+        const mag = Math.sqrt(x * x + y * y + z * z);
+
+        const now = Date.now();
+
+        // Walking produces periodic spikes above 11.4 m/s²
+        // With debounce of 300ms (max ~200 steps/min)
+        if (mag > 11.4 && (mag - this.lastAccMag > 1.2) && (now - this.lastStepTime > 300)) {
+            this.lastStepTime = now;
+            this.registerRealtimeStep();
+        }
+
+        this.lastAccMag = mag;
+    }
+
+    registerRealtimeStep() {
+        this.liveSteps++;
+        this.pedometerStepsUnsynced++;
+        this.liveDistance += 0.00075;
+        this.liveCalories += 0.04;
+
+        const now = Date.now();
+        this.recentStepTimes.push(now);
+        if (this.recentStepTimes.length > 6) {
+            this.recentStepTimes.shift();
+        }
+
+        if (this.recentStepTimes.length >= 2) {
+            const timeSpanSec = (this.recentStepTimes[this.recentStepTimes.length - 1] - this.recentStepTimes[0]) / 1000;
+            if (timeSpanSec > 0) {
+                const cadence = Math.round(((this.recentStepTimes.length - 1) / timeSpanSec) * 60);
+                const cadEl = document.getElementById("act-cadence");
+                if (cadEl) cadEl.textContent = `${cadence} steps/min`;
+            }
+        }
+
+        // Pulse the step circle visually
+        const circle = document.getElementById("step-pulse-circle");
+        if (circle) {
+            circle.style.transform = "scale(1.05)";
+            setTimeout(() => { circle.style.transform = "scale(1)"; }, 120);
+        }
+
+        this.updateActivityUI();
+
+        // Auto-sync to database every 5 steps
+        if (this.pedometerStepsUnsynced >= 5) {
+            this.syncStepsToDatabase();
+        }
+    }
+
+    async syncStepsToDatabase() {
+        if (this.pedometerStepsUnsynced <= 0) return;
+
+        const stepsToSend = this.pedometerStepsUnsynced;
+        this.pedometerStepsUnsynced = 0;
+
+        const token = localStorage.getItem("fitbat_token");
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const dist = stepsToSend * 0.00075;
+        const cals = stepsToSend * 0.04;
+        const mins = Math.max(1, Math.round(stepsToSend / 100));
+
+        try {
+            await fetch("/api/activity/log", {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    steps: stepsToSend,
+                    distance_km: dist,
+                    calories_burned: cals,
+                    active_minutes: mins
+                })
+            });
+            this.loadDailyTasks();
+        } catch (e) {
+            console.warn("Step sync error:", e);
         }
     }
 
@@ -500,7 +689,7 @@ class FitbatApp {
                 })
             });
             if (window.soundEngine) window.soundEngine.playRep();
-            this.loadTodayActivity();
+            await this.loadTodayActivity();
             this.loadDailyTasks();
         } catch (e) {
             console.error(e);
@@ -705,13 +894,39 @@ class FitbatApp {
         if (!text) return;
 
         input.value = "";
-        await window.chatbotWidget.sendMessage(text);
+        if (window.chatbotWidget) {
+            window.chatbotWidget.sendMessage(text);
+        }
         setTimeout(() => this.loadHealthMonitor(), 1200);
     }
 
     async logWater(glasses) {
-        await window.chatbotWidget.sendMessage(`I drank ${glasses} glass${glasses > 1 ? 'es' : ''} of water`);
-        setTimeout(() => this.loadHealthMonitor(), 1200);
+        const token = localStorage.getItem("fitbat_token");
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        try {
+            await fetch("/api/nutrition/log", {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    meal_type: "water",
+                    food_description: `${glasses} glass${glasses > 1 ? 'es' : ''} of water`,
+                    estimated_calories: 0,
+                    protein_g: 0,
+                    carbs_g: 0,
+                    fats_g: 0,
+                    water_glasses: glasses
+                })
+            });
+        } catch (e) {
+            console.warn(e);
+        }
+
+        if (window.chatbotWidget) {
+            window.chatbotWidget.sendMessage(`I drank ${glasses} glass${glasses > 1 ? 'es' : ''} of water`);
+        }
+        await this.loadHealthMonitor();
     }
 
     startHealthCheckIn() {

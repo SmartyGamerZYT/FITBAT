@@ -294,36 +294,66 @@
 
         <!-- VIEW 5: STEP & ACTIVITY MONITOR -->
         <section id="view-activity" class="app-view">
-            <div style="margin-bottom: 1.5rem;">
-                <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">👟 Activity & Step Monitor</h1>
-                <p style="color: var(--text-secondary);">Track your daily walking mileage, active minutes, and calorie burn.</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">👟 Real-Time Step & Activity Monitor</h1>
+                    <p style="color: var(--text-secondary);">Real-time accelerometer pedometer tracks your live walking and saves every step to the database.</p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <span id="pedometer-badge" class="ex-category-badge" style="background: #f1f5f9; color: var(--text-secondary);">⚪ Sensor Standby</span>
+                </div>
             </div>
 
             <div class="dashboard-grid">
-                <div class="glass-card" style="text-align: center; padding: 2.5rem 1.5rem;">
-                    <div style="font-size: 3.4rem; font-family: var(--font-heading); font-weight: 900; color: var(--blue);" id="act-steps-count">0</div>
-                    <span class="stat-label">STEPS TAKEN TODAY</span>
-                    <div class="power-bar-wrap" style="height: 12px; margin: 1.5rem auto; max-width: 300px; background: #e2e8f0;">
-                        <div class="power-bar-fill" id="step-progress-bar" style="width: 0%; background: var(--blue);"></div>
+                <!-- Main Real-Time Pedometer Dial Card -->
+                <div class="glass-card" style="text-align: center; padding: 2.2rem 1.5rem; position: relative;">
+                    <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 0.8rem;">
+                        <div id="step-pulse-circle" style="width: 170px; height: 170px; border-radius: 50%; border: 6px solid var(--blue); display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 0 auto; box-shadow: 0 0 25px rgba(37,99,235,0.2); transition: transform 0.15s ease;">
+                            <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 800;">LIVE STEPS</span>
+                            <div style="font-size: 3rem; font-family: var(--font-heading); font-weight: 900; color: var(--blue); line-height: 1.1;" id="act-steps-count">0</div>
+                            <span id="act-cadence" style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 700;">0 steps/min</span>
+                        </div>
                     </div>
-                    <div id="act-step-pct" style="color: var(--text-secondary); font-size: 0.95rem; font-weight: 700;">0% of 8,000 goal</div>
-                    <div style="margin-top: 1.5rem;">
-                        <button class="btn-primary" onclick="window.app.simulateWalking(500)">+ Log 500 Steps Walk 🚶‍♂️</button>
+
+                    <div class="power-bar-wrap" style="height: 12px; margin: 1.2rem auto; max-width: 320px; background: #e2e8f0;">
+                        <div class="power-bar-fill" id="step-progress-bar" style="width: 0%; background: linear-gradient(90deg, var(--blue), var(--emerald));"></div>
+                    </div>
+                    <div id="act-step-pct" style="color: var(--text-secondary); font-size: 0.92rem; font-weight: 700;">0% of 8,000 daily goal</div>
+
+                    <!-- Live Control Buttons -->
+                    <div style="display: flex; justify-content: center; gap: 0.6rem; margin-top: 1.5rem; flex-wrap: wrap;">
+                        <button id="btn-toggle-pedometer" class="btn-primary" style="padding: 0.65rem 1.4rem; font-size: 0.92rem;" onclick="window.app.toggleRealtimePedometer()">
+                            ▶️ Start Real-Time Sensor
+                        </button>
+                    </div>
+
+                    <!-- Quick manual simulation buttons for testing on laptops -->
+                    <div style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.4rem; flex-wrap: wrap;">
+                        <button class="ex-category-badge" style="cursor: pointer; padding: 0.35rem 0.7rem;" onclick="window.app.simulateWalking(100)">+100 Steps</button>
+                        <button class="ex-category-badge" style="cursor: pointer; padding: 0.35rem 0.7rem;" onclick="window.app.simulateWalking(500)">+500 Steps Walk</button>
+                        <button class="ex-category-badge" style="cursor: pointer; padding: 0.35rem 0.7rem;" onclick="window.app.simulateWalking(1000)">+1,000 Steps</button>
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.8rem;">
+                        💾 Auto-syncs live to database • Phone accelerometer & laptop supported
                     </div>
                 </div>
 
-                <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-around; gap: 1rem;">
+                <!-- Live Metrics Card -->
+                <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-around; gap: 1.2rem;">
                     <div class="metric-stat-item">
-                        <span class="stat-label">Distance Covered</span>
-                        <span class="stat-value" id="act-distance" style="color: var(--emerald);">0.00 km</span>
+                        <span class="stat-label">Total Distance</span>
+                        <span class="stat-value" id="act-distance" style="color: var(--emerald); font-size: 1.8rem;">0.00 km</span>
                     </div>
                     <div class="metric-stat-item">
-                        <span class="stat-label">Calories Burned</span>
-                        <span class="stat-value" id="act-calories" style="color: var(--amber);">0 kcal</span>
+                        <span class="stat-label">Active Calories Burned</span>
+                        <span class="stat-value" id="act-calories" style="color: var(--amber); font-size: 1.8rem;">0 kcal</span>
                     </div>
                     <div class="metric-stat-item">
-                        <span class="stat-label">Active Time</span>
-                        <span class="stat-value" id="act-active-min" style="color: var(--coral);">0 min</span>
+                        <span class="stat-label">Active Walking Time</span>
+                        <span class="stat-value" id="act-active-min" style="color: var(--coral); font-size: 1.8rem;">0 min</span>
+                    </div>
+                    <div style="padding: 0.8rem; background: var(--bg-card-subtle); border-radius: 12px; border: 1px solid var(--border-color); font-size: 0.82rem; color: var(--text-secondary);">
+                        🎯 <strong>Daily Quest Progress</strong>: Reach 4,000 steps to automatically complete the Morning Stride quest and earn +50 XP and coins!
                     </div>
                 </div>
             </div>
