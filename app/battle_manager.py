@@ -373,6 +373,8 @@ class BattleManager:
 
         if room_id not in self.active_rooms:
             return
+        
+        print(f"[BATTLE] Finishing match {room_id}")
         room = self.active_rooms[room_id]
         room.is_active = False
 
@@ -460,44 +462,54 @@ class BattleManager:
     def record_match_result(self, user_id: int, opponent_name: str, opponent_type: str, 
                             age_group: str, exercise_id: str, user_reps: int, 
                             opp_reps: int, outcome: str, xp: int):
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        now_str = datetime.now().isoformat()
+        conn = None
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            now_str = datetime.now().isoformat()
+            print(f"[DB] Saving match result: user_id={user_id}, outcome={outcome}")
 
-        cursor.execute("""
-        INSERT INTO battle_matches (user_id, opponent_name, opponent_type, age_group, exercise_id, user_reps, opponent_reps, outcome, xp_earned, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, opponent_name, opponent_type, age_group, exercise_id, user_reps, opp_reps, outcome, xp, now_str))
-
-        won = 1 if outcome == "VICTORY" else 0
-        cursor.execute("""
-        UPDATE users 
-        SET xp = xp + ?, points = points + ?, coins = coins + ?
-        WHERE id = ?
-        """, (xp, xp, 30 if won else 10, user_id))
-
-        cursor.execute("""
-        SELECT * FROM exercise_stats WHERE user_id = ? AND exercise_id = ?
-        """, (user_id, exercise_id))
-        row = cursor.fetchone()
-        if row:
-            max_reps = max(row["max_reps_single_match"], user_reps)
             cursor.execute("""
-            UPDATE exercise_stats
-            SET total_reps = total_reps + ?,
-                max_reps_single_match = ?,
-                matches_played = matches_played + 1,
-                matches_won = matches_won + ?,
-                updated_at = ?
-            WHERE user_id = ? AND exercise_id = ?
-            """, (user_reps, max_reps, won, now_str, user_id, exercise_id))
-        else:
-            cursor.execute("""
-            INSERT INTO exercise_stats (user_id, exercise_id, total_reps, max_reps_single_match, matches_played, matches_won, updated_at)
-            VALUES (?, ?, ?, ?, 1, ?, ?)
-            """, (user_id, exercise_id, user_reps, user_reps, won, now_str))
+            INSERT INTO battle_matches (user_id, opponent_name, opponent_type, age_group, exercise_id, user_reps, opponent_reps, outcome, xp_earned, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, opponent_name, opponent_type, age_group, exercise_id, user_reps, opp_reps, outcome, xp, now_str))
 
-        conn.commit()
-        conn.close()
+            won = 1 if outcome == "VICTORY" else 0
+            cursor.execute("""
+            UPDATE users 
+            SET xp = xp + ?, points = points + ?, coins = coins + ?
+            WHERE id = ?
+            """, (xp, xp, 30 if won else 10, user_id))
+
+            cursor.execute("""
+            SELECT * FROM exercise_stats WHERE user_id = ? AND exercise_id = ?
+            """, (user_id, exercise_id))
+            row = cursor.fetchone()
+            if row:
+                max_reps = max(row["max_reps_single_match"], user_reps)
+                cursor.execute("""
+                UPDATE exercise_stats
+                SET total_reps = total_reps + ?,
+                    max_reps_single_match = ?,
+                    matches_played = matches_played + 1,
+                    matches_won = matches_won + ?,
+                    updated_at = ?
+                WHERE user_id = ? AND exercise_id = ?
+                """, (user_reps, max_reps, won, now_str, user_id, exercise_id))
+            else:
+                cursor.execute("""
+                INSERT INTO exercise_stats (user_id, exercise_id, total_reps, max_reps_single_match, matches_played, matches_won, updated_at)
+                VALUES (?, ?, ?, ?, 1, ?, ?)
+                """, (user_id, exercise_id, user_reps, user_reps, won, now_str))
+
+            conn.commit()
+            print(f"[DB] Match saved successfully: match_id={cursor.lastrowid} for user_id={user_id}")
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            print(f"[DB ERROR] Failed to save match result for user_id {user_id}: {type(e).__name__}: {e}")
+        finally:
+            if conn:
+                conn.close()
 
 battle_manager = BattleManager()

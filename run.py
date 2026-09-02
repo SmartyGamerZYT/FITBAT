@@ -22,11 +22,11 @@ def main():
     
     print("[3/3] Launching FastAPI Web & WebSocket Server...")
     print("=" * 60)
-    print("🚀 Server running at: http://127.0.0.1:8000")
-    print("📱 Open http://127.0.0.1:8000 in your browser to start battles!")
+    print("🚀 Server running on all interfaces: http://0.0.0.0:8000")
+    print("📱 Open http://localhost:8000 or your LAN IP in your browser to start battles!")
     print("=" * 60)
 
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=False)
 
 if __name__ == "__main__":
     main()

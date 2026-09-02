@@ -79,6 +79,12 @@ class BattleArena {
         console.log("[BattleArena] Received event:", data.type);
 
         switch (data.type) {
+            case "ERROR":
+                this.showBattleOverlay(data.message);
+                alert(data.message);
+                this.exitBattle();
+                break;
+
             case "ROOM_CREATED":
                 this.roomCode = data.room_code;
                 this.showWaitingForFriendModal(data.room_code);
@@ -191,6 +197,7 @@ class BattleArena {
 
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                console.log("[WEBRTC] ICE candidate sent");
                 this.ws.send(JSON.stringify({
                     type: "WEBRTC_ICE_CANDIDATE",
                     candidate: event.candidate
@@ -198,7 +205,12 @@ class BattleArena {
             }
         };
 
+        this.peerConnection.onconnectionstatechange = () => {
+            console.log("[WEBRTC] Connection state:", this.peerConnection.connectionState);
+        };
+
         if (this.isInitiator) {
+            console.log("[WEBRTC] Creating offer");
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
             this.ws.send(JSON.stringify({
@@ -209,6 +221,7 @@ class BattleArena {
     }
 
     async handleWebRTCOffer(offer) {
+        console.log("[WEBRTC] Received offer, creating answer");
         if (!this.peerConnection) await this.initWebRTCPeerConnection();
         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await this.peerConnection.createAnswer();
@@ -221,6 +234,7 @@ class BattleArena {
 
     async handleWebRTCAnswer(answer) {
         if (this.peerConnection) {
+            console.log("[WEBRTC] Received answer");
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         }
     }
@@ -228,9 +242,10 @@ class BattleArena {
     async handleWebRTCIceCandidate(candidate) {
         if (this.peerConnection) {
             try {
+                console.log("[WEBRTC] ICE candidate received");
                 await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
             } catch (e) {
-                console.warn("Error adding ICE candidate:", e);
+                console.warn("[WEBRTC ERROR] adding ICE candidate:", e);
             }
         }
     }

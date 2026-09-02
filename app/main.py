@@ -497,9 +497,13 @@ async def websocket_battle_endpoint(websocket: WebSocket, token: Optional[str] =
     session = get_current_user_from_token(token) if token else None
     
     if not session:
-        guest_id = random.randint(50000, 99999)
-        guest_name = f"Warrior_{random.randint(100, 999)}"
-        session = {"user_id": guest_id, "username": guest_name}
+        await websocket.accept()
+        await websocket.send_json({
+            "type": "ERROR",
+            "message": "Authentication required for multiplayer battles. Please log in."
+        })
+        await websocket.close(code=1008)
+        return
 
     user_id = session["user_id"]
     username = session["username"]
@@ -532,6 +536,8 @@ async def websocket_battle_endpoint(websocket: WebSocket, token: Optional[str] =
                 break
 
     except WebSocketDisconnect:
+        print(f"[WS] Player {username} disconnected.")
         await battle_manager.finish_match(room_id, websocket)
-    except Exception:
+    except Exception as e:
+        print(f"[WS ERROR] Unexpected error for player {username}: {type(e).__name__}: {e}")
         await battle_manager.finish_match(room_id, websocket)
