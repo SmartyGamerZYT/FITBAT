@@ -1,5 +1,5 @@
 // FITBAT High-Precision Computer Vision Pose Tracker Engine
-// Multi-Signal Biometric Angle Math + Vertical Motion Oscillation Filter
+// Multi-Signal Biometric Angle Math + Skeleton Coordinate Mirror Sync + Full-Body Posture Verification
 
 class PoseTracker {
     constructor() {
@@ -20,12 +20,8 @@ class PoseTracker {
         this.isTracking = false;
         this.animFrameId = null;
         
-        // Multi-signal state tracking
         this.lastRepTimestamp = 0;
         this.hasDetectedLandmarks = false;
-        this.baselineHeight = null;
-        this.minHeightDuringRep = 999;
-        this.maxHeightDuringRep = 0;
         this.lastAngle = 180;
     }
 
@@ -37,7 +33,6 @@ class PoseTracker {
         this.lastPlankCheck = Date.now();
         this.formFeedback = "Get Ready!";
         this.lastRepTimestamp = Date.now();
-        this.baselineHeight = null;
     }
 
     async init(videoElement, canvasElement, onRep, onFeedback) {
@@ -79,11 +74,11 @@ class PoseTracker {
                 });
 
                 this.pose.setOptions({
-                    modelComplexity: 0, // 0 is fast 60fps lightweight model
+                    modelComplexity: 0,
                     smoothLandmarks: true,
                     enableSegmentation: false,
                     smoothSegmentation: false,
-                    minDetectionConfidence: 0.25, // Forgiving for low-light & laptops
+                    minDetectionConfidence: 0.25,
                     minTrackingConfidence: 0.25
                 });
 
@@ -184,23 +179,56 @@ class PoseTracker {
         this.hasDetectedLandmarks = true;
         const lm = results.poseLandmarks;
         
-        // Draw Skeleton overlay with joints and connections
-        this.drawSkeleton(ctx, lm, w, h);
+        // 1. Draw Skeleton overlay with HORIZONTALLY MIRRORED coordinates to match mirrored video!
+        this.drawMirroredSkeleton(ctx, lm, w, h);
 
-        // Process High-Accuracy Exercise Rep Logic
+        // 2. Process High-Accuracy Full-Body Exercise Rep Logic
         this.processExerciseLogic(lm, ctx, w, h);
     }
 
-    processExerciseLogic(lm, ctx, w, h) {
-        // Landmarks:
-        // 0: nose
-        // 11: lShoulder, 12: rShoulder
-        // 13: lElbow, 14: rElbow
-        // 15: lWrist, 16: rWrist
-        // 23: lHip, 24: rHip
-        // 25: lKnee, 26: rKnee
-        // 27: lAnkle, 28: rAnkle
+    // Coordinates are flipped horizontally (1 - x) to match CSS scaleX(-1) mirrored video
+    drawMirroredSkeleton(ctx, landmarks, w, h) {
+        const connections = [
+            [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+            [11, 23], [12, 24], [23, 24],
+            [23, 25], [25, 27], [24, 26], [26, 28]
+        ];
 
+        ctx.strokeStyle = "rgba(59, 130, 246, 0.9)";
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+
+        for (const [i, j] of connections) {
+            const p1 = landmarks[i];
+            const p2 = landmarks[j];
+            if (p1 && p2 && (p1.visibility || 0.5) > 0.2 && (p2.visibility || 0.5) > 0.2) {
+                const x1 = (1 - p1.x) * w;
+                const y1 = p1.y * h;
+                const x2 = (1 - p2.x) * w;
+                const y2 = p2.y * h;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+        }
+
+        for (let idx of [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]) {
+            const p = landmarks[idx];
+            if (p && (p.visibility || 0.5) > 0.2) {
+                const px = (1 - p.x) * w;
+                const py = p.y * h;
+
+                ctx.fillStyle = "#f43f5e";
+                ctx.beginPath();
+                ctx.arc(px, py, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+    }
+
+    processExerciseLogic(lm, ctx, w, h) {
         const nose = lm[0];
         const lShoulder = lm[11], rShoulder = lm[12];
         const lElbow = lm[13], rElbow = lm[14];
@@ -211,11 +239,13 @@ class PoseTracker {
 
         const now = Date.now();
 
-        // 1. Calculate best visible joint angles (supports side, front, and 45-degree angle)
+        // Joint Angles
         const lArmAngle = this.calculateAngle(lShoulder, lElbow, lWrist);
         const rArmAngle = this.calculateAngle(rShoulder, rElbow, rWrist);
         const lLegAngle = this.calculateAngle(lHip, lKnee, lAnkle);
         const rLegAngle = this.calculateAngle(rHip, rKnee, rAnkle);
+        const lSpineAngle = this.calculateAngle(lShoulder, lHip, lKnee);
+        const rSpineAngle = this.calculateAngle(rShoulder, rHip, rKnee);
 
         const lArmVis = (lShoulder?.visibility || 0.5) + (lElbow?.visibility || 0.5) + (lWrist?.visibility || 0.5);
         const rArmVis = (rShoulder?.visibility || 0.5) + (rElbow?.visibility || 0.5) + (rWrist?.visibility || 0.5);
@@ -224,27 +254,33 @@ class PoseTracker {
         const lLegVis = (lHip?.visibility || 0.5) + (lKnee?.visibility || 0.5) + (lAnkle?.visibility || 0.5);
         const rLegVis = (rHip?.visibility || 0.5) + (rKnee?.visibility || 0.5) + (rAnkle?.visibility || 0.5);
         const bestLegAngle = lLegVis >= rLegVis ? lLegAngle : rLegAngle;
-
-        const midShoulderY = (lShoulder.y + rShoulder.y) / 2;
-        const midHipY = (lHip.y + rHip.y) / 2;
+        const bestSpineAngle = Math.max(lSpineAngle, rSpineAngle);
 
         switch (this.currentExercise) {
             // ----------------------------------------------------
-            // 1. PUSHUPS: High Precision Arm Flexion & Depth
+            // 1. PUSHUPS: Requires Full Body Horizontal Plank Posture (No Sitting!)
             // ----------------------------------------------------
             case "pushups": {
-                // Min of either arm or best visible arm
+                // Check if user is sitting upright (vertical spine & bent hips in a chair)
+                const isSittingUpright = (bestSpineAngle < 125) && (lHip.visibility > 0.3 || rHip.visibility > 0.3);
                 const armAngle = Math.min(lArmAngle, rArmAngle, bestArmAngle);
+
+                if (isSittingUpright) {
+                    this.drawDebugHUD(ctx, "Pushup Form", "SEATED (INVALID)", "STAND/PLANK");
+                    this.updateFeedback("⚠️ Full body required: Get into floor pushup plank!");
+                    return;
+                }
+
                 this.drawDebugHUD(ctx, "Elbow Angle", `${armAngle}°`, this.stage);
 
-                // Down threshold: elbow bent < 115°
-                if (armAngle < 115) {
+                // Down: Elbow bent < 112°
+                if (armAngle < 112) {
                     if (this.stage !== "down") {
                         this.stage = "down";
                         this.updateFeedback("Good Depth! Push All The Way Up!");
                     }
                 }
-                // Up threshold: elbow extended > 148°
+                // Up: Elbow extended > 148°
                 if (armAngle > 148 && this.stage === "down") {
                     if (now - this.lastRepTimestamp > 450) {
                         this.lastRepTimestamp = now;
@@ -509,7 +545,7 @@ class PoseTracker {
     }
 
     drawDebugHUD(ctx, metricLabel, value, phase) {
-        ctx.fillStyle = "rgba(15, 23, 42, 0.75)";
+        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
         ctx.beginPath();
         ctx.roundRect(14, 14, 210, 48, 8);
         ctx.fill();
@@ -521,39 +557,6 @@ class PoseTracker {
         ctx.fillStyle = phase.includes("down") || phase.includes("curled") || phase.includes("crunched") ? "#f59e0b" : "#10b981";
         ctx.font = "bold 11px Poppins, sans-serif";
         ctx.fillText(`PHASE: ${phase.toUpperCase()}`, 24, 52);
-    }
-
-    drawSkeleton(ctx, landmarks, w, h) {
-        const connections = [
-            [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
-            [11, 23], [12, 24], [23, 24],
-            [23, 25], [25, 27], [24, 26], [26, 28]
-        ];
-
-        ctx.strokeStyle = "rgba(59, 130, 246, 0.85)";
-        ctx.lineWidth = 4;
-        ctx.lineCap = "round";
-
-        for (const [i, j] of connections) {
-            const p1 = landmarks[i];
-            const p2 = landmarks[j];
-            if (p1 && p2 && (p1.visibility || 0.5) > 0.2 && (p2.visibility || 0.5) > 0.2) {
-                ctx.beginPath();
-                ctx.moveTo(p1.x * w, p1.y * h);
-                ctx.lineTo(p2.x * w, p2.y * h);
-                ctx.stroke();
-            }
-        }
-
-        for (let idx of [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]) {
-            const p = landmarks[idx];
-            if (p && (p.visibility || 0.5) > 0.2) {
-                ctx.fillStyle = "#f43f5e";
-                ctx.beginPath();
-                ctx.arc(p.x * w, p.y * h, 5, 0, 2 * Math.PI);
-                ctx.fill();
-            }
-        }
     }
 
     registerRep(feedbackMessage) {
