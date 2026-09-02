@@ -1,12 +1,29 @@
 import sqlite3
 import os
-import json
+import shutil
 from datetime import datetime, date
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fitbat.db")
+# Determine writable DB path (Vercel / Lambda requires writing to /tmp)
+LOCAL_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fitbat.db")
+
+def get_db_path() -> str:
+    # Check if running in Vercel or AWS Lambda / Serverless read-only environment
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or not os.access(os.path.dirname(LOCAL_DB_PATH), os.W_OK):
+        tmp_db = "/tmp/fitbat.db"
+        if not os.path.exists(tmp_db):
+            if os.path.exists(LOCAL_DB_PATH):
+                try:
+                    shutil.copyfile(LOCAL_DB_PATH, tmp_db)
+                except Exception:
+                    pass
+        return tmp_db
+    return LOCAL_DB_PATH
+
+DB_PATH = get_db_path()
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
+    db_file = get_db_path()
+    conn = sqlite3.connect(db_file)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.row_factory = sqlite3.Row
     return conn
