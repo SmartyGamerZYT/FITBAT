@@ -244,6 +244,9 @@
                         <video id="battle-user-video" playsinline muted autoplay></video>
                         <canvas id="battle-user-canvas"></canvas>
 
+                        <!-- MINI CARTOON COACH GUIDE (Downside Right Side) -->
+                        <div id="battle-cartoon-coach-container"></div>
+
                         <div class="combat-effects-container" id="player-combat-effects"></div>
                         <div class="form-feedback-banner" id="battle-form-feedback">Ready to Battle!</div>
                     </div>
@@ -509,6 +512,29 @@
         </div>
     </div>
 
+    <!-- Modal: Random Arena Matchmaking Radar -->
+    <div class="modal-overlay" id="random-arena-matchmaking-modal">
+        <div class="modal-box" style="text-align: center; max-width: 420px;">
+            <div style="position: relative; width: 90px; height: 90px; margin: 0 auto 1.2rem auto;">
+                <div class="matchmaking-radar-ring"></div>
+                <div class="matchmaking-radar-ring delay"></div>
+                <div style="position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; font-size: 2.6rem;">
+                    🎲
+                </div>
+            </div>
+            <h2 style="font-family: var(--font-heading); font-size: 1.6rem; color: var(--text-primary); margin-bottom: 0.4rem;">Finding Opponent...</h2>
+            <p id="random-matchmaking-status" style="color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 1.2rem;">Scanning online warriors in your age division...</p>
+            
+            <div style="background: var(--bg-card-subtle); padding: 0.8rem; border-radius: 12px; border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
+                <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">DISCIPLINE</div>
+                <div id="random-matchmaking-ex-badge" style="font-weight: 900; color: var(--blue); font-size: 1.1rem; text-transform: uppercase;">FROG JUMPS</div>
+                <div id="random-matchmaking-timer-badge" style="font-size: 0.85rem; color: var(--emerald); font-weight: 700; margin-top: 4px;">⚡ Quick Match in ~3s</div>
+            </div>
+
+            <button class="btn-secondary" style="width: 100%; color: var(--coral);" onclick="window.battleArena.exitBattle()">Cancel Matchmaking</button>
+        </div>
+    </div>
+
     <!-- Modal 2: Interactive Quest Camera Challenge -->
     <div class="modal-overlay" id="quest-camera-modal">
         <div class="quest-modal-box">
@@ -518,9 +544,10 @@
             </div>
             <p id="quest-modal-desc" style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.3rem;">Position yourself in front of the camera and complete the required reps!</p>
 
-            <div class="quest-camera-viewport">
+            <div class="quest-camera-viewport" style="position: relative;">
                 <video id="quest-video-feed" playsinline muted autoplay></video>
                 <canvas id="quest-canvas-feed"></canvas>
+                <div id="quest-cartoon-coach-container"></div>
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -686,6 +713,7 @@
     <!-- Scripts -->
     <script src="/static/js/sound.js"></script>
     <script src="/static/js/cv_tracker.js"></script>
+    <script src="/static/js/cartoon_coach.js"></script>
     <script src="/static/js/battle.js"></script>
     <script src="/static/js/chatbot.js"></script>
     <script src="/static/js/app.js"></script>

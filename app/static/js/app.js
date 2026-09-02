@@ -397,6 +397,11 @@ class FitbatApp {
             this.onQuestRep.bind(this),
             this.onQuestFeedback.bind(this)
         );
+
+        // Render cartoon coach guide in quest viewport
+        if (window.cartoonCoach) {
+            window.cartoonCoach.render("quest-cartoon-coach-container", exId);
+        }
     }
 
     async onQuestRep(repCount, formScore) {
@@ -411,6 +416,7 @@ class FitbatApp {
         if (fill) fill.style.width = `${pct}%`;
 
         if (window.soundEngine) window.soundEngine.playRep();
+        if (window.cartoonCoach) window.cartoonCoach.onRepPerformed();
 
         if (this.questReps >= target) {
             if (window.soundEngine) window.soundEngine.playVictory();

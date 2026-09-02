@@ -125,11 +125,12 @@ class BattleArena {
                 break;
 
             case "SEARCHING_OPPONENT":
-                this.showBattleOverlay(data.message);
+                this.showMatchmakingModal(data.message, data.stage);
                 break;
 
             case "MATCH_START":
                 this.hideWaitingForFriendModal();
+                this.hideMatchmakingModal();
                 
                 this.isBattleActive = true;
                 this.opponentName = data.opponent.username;
@@ -165,6 +166,11 @@ class BattleArena {
                     tagEl.textContent = `${theme.icon} ${theme.label}`;
                     tagEl.style.color = theme.color;
                     tagEl.style.background = theme.bg;
+                }
+
+                // Render Cartoon Coach in bottom-right of player viewport
+                if (window.cartoonCoach) {
+                    window.cartoonCoach.render("battle-cartoon-coach-container", this.currentExercise);
                 }
                 
                 this.showBattleOverlay(`MATCH CONNECTED! [${theme.icon} ${this.currentExercise.replace(/_/g, ' ').toUpperCase()}] 3... 2... 1... FIGHT!`);
@@ -382,6 +388,9 @@ class BattleArena {
             this.spawnCombatEffect("player", `${label} ⚡`, false);
         }
 
+        // Trigger cartoon coach motivational praise
+        if (window.cartoonCoach) window.cartoonCoach.onRepPerformed();
+
         this.updatePlayerHUD();
 
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -524,8 +533,35 @@ class BattleArena {
 
     exitBattle() {
         this.cleanupSession();
+        this.hideMatchmakingModal();
         document.getElementById("battle-result-modal").classList.remove("open");
         if (window.app) window.app.showView("dashboard");
+    }
+
+    showMatchmakingModal(message, stage) {
+        const modal = document.getElementById("random-arena-matchmaking-modal");
+        if (!modal) return;
+        modal.classList.add("open");
+
+        const statusEl = document.getElementById("random-matchmaking-status");
+        if (statusEl) statusEl.textContent = message || "Searching for opponent...";
+
+        const exBadge = document.getElementById("random-matchmaking-ex-badge");
+        if (exBadge) exBadge.textContent = (this.currentExercise || "pushups").replace(/_/g, " ").toUpperCase();
+
+        const timerBadge = document.getElementById("random-matchmaking-timer-badge");
+        if (timerBadge) {
+            if (stage === "ANY_AGE") {
+                timerBadge.textContent = "🌍 Searching all divisions... AI rival incoming!";
+            } else {
+                timerBadge.textContent = "⚡ Quick Match in ~3s";
+            }
+        }
+    }
+
+    hideMatchmakingModal() {
+        const modal = document.getElementById("random-arena-matchmaking-modal");
+        if (modal) modal.classList.remove("open");
     }
 }
 

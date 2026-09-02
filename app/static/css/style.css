@@ -1053,3 +1053,295 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* ===================================================
+   CARTOON COACH ANIMATED GUIDE & MATCHMAKING RADAR
+=================================================== */
+
+.cartoon-coach-widget {
+    position: absolute;
+    bottom: 50px;
+    right: 12px;
+    z-index: 18;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.coach-speech-bubble {
+    background: rgba(15, 23, 42, 0.94);
+    color: #f8fafc;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    margin-bottom: 5px;
+    white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    animation: coachBubbleFloat 2.2s infinite ease-in-out;
+    transition: all 0.2s ease;
+}
+
+@keyframes coachBubbleFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+.coach-stage {
+    width: 96px;
+    height: 96px;
+    background: radial-gradient(circle, rgba(30, 41, 59, 0.92) 0%, rgba(15, 23, 42, 0.98) 100%);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), inset 0 0 16px rgba(37, 99, 235, 0.3);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+    position: relative;
+}
+
+.coach-badge {
+    margin-top: 4px;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 900;
+    padding: 2px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.coach-svg {
+    width: 88px;
+    height: 88px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
+
+/* 1. Pushup Animation */
+.coach-anim-pushup .pushup-body {
+    transform-origin: 18px 78px;
+    animation: animPushupBody 1.5s infinite ease-in-out;
+}
+@keyframes animPushupBody {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(14deg); }
+}
+.coach-anim-pushup .coach-sweat {
+    animation: animSweatPulse 1.5s infinite;
+}
+@keyframes animSweatPulse {
+    0%, 40%, 100% { opacity: 0; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(3px); }
+}
+
+/* 2. Frog Jump Animation */
+.coach-anim-frog .frog-leaper {
+    transform-origin: 50px 80px;
+    animation: animFrogJump 1.4s infinite cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes animFrogJump {
+    0%, 100% { transform: translateY(0) scaleY(0.75); }
+    30% { transform: translateY(-30px) scaleY(1.15); }
+    60% { transform: translateY(-20px) scaleY(1); }
+    80% { transform: translateY(0) scaleY(0.75); }
+}
+
+/* 3. Squat Animation */
+.coach-anim-squat .squat-body {
+    transform-origin: 50px 86px;
+    animation: animSquatBody 1.7s infinite ease-in-out;
+}
+@keyframes animSquatBody {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(18px); }
+}
+
+/* 4. Jumping Jacks Animation */
+.coach-anim-jack .jack-body {
+    animation: animJackHop 0.9s infinite ease-in-out;
+}
+@keyframes animJackHop {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+.coach-anim-jack .jack-arm-l {
+    transform-origin: 45px 42px;
+    animation: animJackArmL 0.9s infinite ease-in-out;
+}
+@keyframes animJackArmL {
+    0%, 100% { transform: rotate(70deg); }
+    50% { transform: rotate(0deg); }
+}
+.coach-anim-jack .jack-arm-r {
+    transform-origin: 55px 42px;
+    animation: animJackArmR 0.9s infinite ease-in-out;
+}
+@keyframes animJackArmR {
+    0%, 100% { transform: rotate(-70deg); }
+    50% { transform: rotate(0deg); }
+}
+.coach-anim-jack .jack-spark {
+    animation: animSpark 0.9s infinite;
+}
+@keyframes animSpark {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+}
+
+/* 5. Bicep Curl Animation */
+.coach-anim-curl .curl-arm-l, .coach-anim-curl .curl-db-l {
+    transform-origin: 44px 40px;
+    animation: animCurlL 1.5s infinite ease-in-out;
+}
+@keyframes animCurlL {
+    0%, 100% { transform: rotate(65deg); }
+    50% { transform: rotate(-10deg); }
+}
+.coach-anim-curl .curl-arm-r, .coach-anim-curl .curl-db-r {
+    transform-origin: 56px 40px;
+    animation: animCurlR 1.5s infinite ease-in-out;
+}
+@keyframes animCurlR {
+    0%, 100% { transform: rotate(-65deg); }
+    50% { transform: rotate(10deg); }
+}
+
+/* 6. Shadow Boxing Animation */
+.coach-anim-box .boxer-punch-l {
+    animation: animPunchL 0.8s infinite ease-out;
+}
+@keyframes animPunchL {
+    0%, 50%, 100% { transform: translateX(0); }
+    25% { transform: translateX(18px) scale(1.15); }
+}
+.coach-anim-box .boxer-punch-r {
+    animation: animPunchR 0.8s infinite ease-out;
+}
+@keyframes animPunchR {
+    0%, 50%, 100% { transform: translateX(0); }
+    75% { transform: translateX(18px) scale(1.15); }
+}
+
+/* 7. Plank Animation */
+.coach-anim-plank .plank-body {
+    animation: animPlankVibe 0.15s infinite;
+}
+@keyframes animPlankVibe {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(-0.5px, 0.5px); }
+}
+.coach-anim-plank .plank-aura {
+    animation: animPlankAura 1.4s infinite ease-in-out alternate;
+}
+@keyframes animPlankAura {
+    0% { transform: scale(0.9); opacity: 0.4; }
+    100% { transform: scale(1.15); opacity: 0.95; }
+}
+
+/* 8. High Knees Animation */
+.coach-anim-knees .knee-cycle-l {
+    transform-origin: 46px 60px;
+    animation: animKneeL 0.6s infinite ease-in-out;
+}
+@keyframes animKneeL {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-16px); }
+}
+.coach-anim-knees .knee-cycle-r {
+    transform-origin: 54px 60px;
+    animation: animKneeR 0.6s infinite ease-in-out;
+}
+@keyframes animKneeR {
+    0%, 100% { transform: translateY(-16px); }
+    50% { transform: translateY(0); }
+}
+
+/* 9. Lunge Animation */
+.coach-anim-lunge .lunge-body {
+    transform-origin: 50px 86px;
+    animation: animLunge 1.8s infinite ease-in-out;
+}
+@keyframes animLunge {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(14px); }
+}
+
+/* 10. Shoulder Press Animation */
+.coach-anim-press .press-arms-group {
+    transform-origin: 50px 40px;
+    animation: animPress 1.6s infinite ease-in-out;
+}
+@keyframes animPress {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+}
+
+/* 11. Crunch Animation */
+.coach-anim-crunch .crunch-torso {
+    transform-origin: 54px 80px;
+    animation: animCrunch 1.6s infinite ease-in-out;
+}
+@keyframes animCrunch {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(-24deg); }
+}
+
+/* 12. Mountain Climber Animation */
+.coach-anim-climber .climber-knee-l {
+    transform-origin: 42px 64px;
+    animation: animClimberL 0.7s infinite ease-in-out;
+}
+@keyframes animClimberL {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(14px, -8px); }
+}
+.coach-anim-climber .climber-knee-r {
+    transform-origin: 42px 64px;
+    animation: animClimberR 0.7s infinite ease-in-out;
+}
+@keyframes animClimberR {
+    0%, 100% { transform: translate(14px, -8px); }
+    50% { transform: translate(0, 0); }
+}
+
+/* 13. Lateral Raise Animation */
+.coach-anim-lateral .lateral-arm-l {
+    transform-origin: 45px 42px;
+    animation: animLateralL 1.7s infinite ease-in-out;
+}
+@keyframes animLateralL {
+    0%, 100% { transform: rotate(55deg); }
+    50% { transform: rotate(0deg); }
+}
+.coach-anim-lateral .lateral-arm-r {
+    transform-origin: 55px 42px;
+    animation: animLateralR 1.7s infinite ease-in-out;
+}
+@keyframes animLateralR {
+    0%, 100% { transform: rotate(-55deg); }
+    50% { transform: rotate(0deg); }
+}
+
+/* Matchmaking Radar Waves Animation */
+.matchmaking-radar-ring {
+    position: absolute;
+    inset: 0;
+    border: 3px solid var(--blue);
+    border-radius: 50%;
+    animation: radarPulse 1.8s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+.matchmaking-radar-ring.delay {
+    animation-delay: 0.9s;
+}
+@keyframes radarPulse {
+    0% { transform: scale(0.6); opacity: 0.9; }
+    100% { transform: scale(1.4); opacity: 0; }
+}
+

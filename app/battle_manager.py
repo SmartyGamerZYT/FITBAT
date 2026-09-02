@@ -156,49 +156,52 @@ class BattleManager:
 
     async def run_progressive_matchmaking(self, websocket: WebSocket, user_id: int, username: str, 
                                           exercise_id: str, age_group: str):
-        # Stage 1: Wait up to 10 seconds for SAME AGE GROUP opponent
-        for _ in range(10):
-            await asyncio.sleep(1.0)
-            # Check if this player was already paired by another incoming player
+        # Stage 1: Wait 2 seconds for SAME AGE GROUP opponent (check every 0.5s)
+        for tick in range(4):
+            await asyncio.sleep(0.5)
+            # Check if already paired
             if not any(e["ws"] == websocket for e in self.waiting_queue):
-                return # Already matched!
+                return
+            
+            # Check for incoming same-age player
+            for idx, entry in enumerate(self.waiting_queue):
+                if entry["exercise_id"] == exercise_id and entry["age_group"] == age_group and entry["ws"] != websocket:
+                    same_age_opp = self.waiting_queue.pop(idx)
+                    self.waiting_queue = [e for e in self.waiting_queue if e["ws"] != websocket]
+                    return await self.pair_two_players(same_age_opp, {
+                        "ws": websocket, "user_id": user_id, "username": username,
+                        "exercise_id": exercise_id, "age_group": age_group
+                    })
 
-        # Stage 2 (10-18s): Expand search to ALL AGE GROUPS for the same exercise!
-        print(f"[Matchmaker] 10s elapsed for {username}. Expanding search to ALL age groups...")
+        # Stage 2: Expand to ALL AGE GROUPS for 1.5 seconds
+        print(f"[Matchmaker] Expanding search for {username} to all age divisions...")
         try:
             await websocket.send_json({
                 "type": "SEARCHING_OPPONENT",
                 "stage": "ANY_AGE",
-                "message": "Expanding search to warriors in ALL age divisions..."
+                "message": "Expanding search to warriors across all divisions..."
             })
         except Exception:
             return
 
-        # Check if anyone in any age group is waiting for this exercise
-        any_age_opp = None
-        for idx, entry in enumerate(self.waiting_queue):
-            if entry["exercise_id"] == exercise_id and entry["ws"] != websocket:
-                any_age_opp = self.waiting_queue.pop(idx)
-                break
-
-        if any_age_opp:
-            # Remove self from queue too
-            self.waiting_queue = [e for e in self.waiting_queue if e["ws"] != websocket]
-            return await self.pair_two_players(any_age_opp, {
-                "ws": websocket, "user_id": user_id, "username": username,
-                "exercise_id": exercise_id, "age_group": age_group
-            })
-
-        # Wait another 6 seconds for any age group
-        for _ in range(6):
-            await asyncio.sleep(1.0)
+        for tick in range(3):
+            await asyncio.sleep(0.5)
             if not any(e["ws"] == websocket for e in self.waiting_queue):
-                return # Already matched!
+                return
+            
+            for idx, entry in enumerate(self.waiting_queue):
+                if entry["exercise_id"] == exercise_id and entry["ws"] != websocket:
+                    any_age_opp = self.waiting_queue.pop(idx)
+                    self.waiting_queue = [e for e in self.waiting_queue if e["ws"] != websocket]
+                    return await self.pair_two_players(any_age_opp, {
+                        "ws": websocket, "user_id": user_id, "username": username,
+                        "exercise_id": exercise_id, "age_group": age_group
+                    })
 
-        # Stage 3: Fallback to smart AI rival so user never waits forever
+        # Stage 3: Instant AI rival fallback (maximum 3.5 seconds total wait)
         if any(e["ws"] == websocket for e in self.waiting_queue):
             self.waiting_queue = [e for e in self.waiting_queue if e["ws"] != websocket]
-            print(f"[Matchmaker] No human opponent found in 16s. Spawning AI rival for {username}")
+            print(f"[Matchmaker] Quick Match fallback: Spawning synchronized AI challenger for {username}")
             await self.spawn_ai_match(websocket, user_id, username, exercise_id, age_group)
 
     async def pair_two_players(self, p1_entry: dict, p2_entry: dict) -> str:
