@@ -380,9 +380,14 @@
 
         <!-- VIEW: DAILY HEALTH MONITOR -->
         <section id="view-health" class="app-view">
-            <div style="margin-bottom: 1.5rem;">
-                <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">🩺 Daily Health Monitor</h1>
-                <p style="color: var(--text-secondary);">Track your meals, hydration, and calories. The AI Coach calculates everything automatically!</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">🩺 Daily Health Monitor</h1>
+                    <p style="color: var(--text-secondary);">Track your meals, hydration, and calories. The AI Coach calculates everything automatically!</p>
+                </div>
+                <button class="btn-secondary" style="color: var(--coral); border-color: var(--coral); font-size: 0.85rem; padding: 0.5rem 1rem;" onclick="window.app.resetTodayHealth()">
+                    🔄 Reset Today
+                </button>
             </div>
 
             <!-- Today's Summary Cards -->

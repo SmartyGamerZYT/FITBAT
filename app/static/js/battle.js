@@ -135,11 +135,16 @@ class BattleArena {
                 this.opponentName = data.opponent.username;
                 this.isInitiator = data.is_initiator || false;
                 
+                if (data.exercise_id) {
+                    this.currentExercise = data.exercise_id;
+                    window.poseTracker.setExercise(data.exercise_id);
+                }
+                
                 document.getElementById("opp-name-display").textContent = this.opponentName;
-                document.getElementById("battle-exercise-display").textContent = data.exercise_id.replace("_", " ").toUpperCase();
+                document.getElementById("battle-exercise-display").textContent = this.currentExercise.replace(/_/g, " ").toUpperCase();
                 document.getElementById("battle-age-display").textContent = data.age_group;
                 
-                this.showBattleOverlay("MATCH CONNECTED! 3... 2... 1... FIGHT!");
+                this.showBattleOverlay(`MATCH CONNECTED! [${this.currentExercise.replace(/_/g, ' ').toUpperCase()}] 3... 2... 1... FIGHT!`);
                 this.startTimer(data.duration || 45);
 
                 if (!data.opponent.is_ai) {
@@ -206,22 +211,43 @@ class BattleArena {
         };
         this.peerConnection = new RTCPeerConnection(config);
 
+        // Ensure we obtain camera tracks reliably
+        let stream = (window.poseTracker && window.poseTracker.stream);
         const localVideo = document.getElementById("battle-user-video");
-        if (localVideo && localVideo.srcObject) {
-            localVideo.srcObject.getTracks().forEach(track => {
-                this.peerConnection.addTrack(track, localVideo.srcObject);
+        if (!stream && localVideo && localVideo.srcObject) {
+            stream = localVideo.srcObject;
+        }
+
+        // If camera stream is still initializing, wait up to 2.5s for it
+        if (!stream) {
+            for (let i = 0; i < 15; i++) {
+                await new Promise(r => setTimeout(r, 150));
+                stream = (window.poseTracker && window.poseTracker.stream) || (localVideo && localVideo.srcObject);
+                if (stream) break;
+            }
+        }
+
+        if (stream) {
+            stream.getTracks().forEach(track => {
+                this.peerConnection.addTrack(track, stream);
             });
         }
 
         this.peerConnection.ontrack = (event) => {
             const oppVideo = document.getElementById("battle-opp-video");
             const oppPlaceholder = document.getElementById("battle-opp-placeholder");
-            if (oppVideo && event.streams[0]) {
-                oppVideo.srcObject = event.streams[0];
+            if (oppVideo) {
+                if (event.streams && event.streams[0]) {
+                    oppVideo.srcObject = event.streams[0];
+                } else if (event.track) {
+                    if (!oppVideo.srcObject) oppVideo.srcObject = new MediaStream();
+                    oppVideo.srcObject.addTrack(event.track);
+                }
                 oppVideo.classList.remove("hidden");
                 oppVideo.setAttribute("playsinline", "true");
+                oppVideo.muted = true;
                 oppVideo.autoplay = true;
-                oppVideo.play().catch(e => console.warn(e));
+                oppVideo.play().catch(e => console.warn("Opponent video autoplay error:", e));
                 if (oppPlaceholder) oppPlaceholder.classList.add("hidden");
             }
         };
@@ -236,7 +262,10 @@ class BattleArena {
         };
 
         if (this.isInitiator) {
-            const offer = await this.peerConnection.createOffer();
+            const offer = await this.peerConnection.createOffer({
+                offerToReceiveVideo: true,
+                offerToReceiveAudio: false
+            });
             await this.peerConnection.setLocalDescription(offer);
             this.ws.send(JSON.stringify({
                 type: "WEBRTC_OFFER",

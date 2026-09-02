@@ -470,37 +470,48 @@ def chat_with_coach(req: ChatRequest, user: Optional[dict] = Depends(get_optiona
     return {"reply": reply}
 
 @app.get("/api/nutrition/today")
-def get_today_nutrition(user: dict = Depends(get_current_user)):
+def get_today_nutrition(user: Optional[dict] = Depends(get_optional_user)):
     conn = get_db_connection()
     cursor = conn.cursor()
     today_str = date.today().isoformat()
 
-    try:
-        cursor.execute("""
-        SELECT COALESCE(SUM(estimated_calories), 0) as total_calories,
-               COALESCE(SUM(protein_g), 0) as total_protein,
-               COALESCE(SUM(carbs_g), 0) as total_carbs,
-               COALESCE(SUM(fats_g), 0) as total_fats,
-               COALESCE(SUM(water_glasses), 0) as total_water
-        FROM nutrition_logs WHERE user_id = ? AND date_str = ?
-        """, (user["user_id"], today_str))
-        totals = dict(cursor.fetchone())
-    except Exception:
-        totals = {"total_calories": 0, "total_protein": 0, "total_carbs": 0, "total_fats": 0, "total_water": 0}
+    totals = {"total_calories": 0, "total_protein": 0, "total_carbs": 0, "total_fats": 0, "total_water": 0}
+    meals = []
+    calorie_target = 2100
 
-    try:
-        cursor.execute("""
-        SELECT meal_type, food_description, estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp
-        FROM nutrition_logs WHERE user_id = ? AND date_str = ?
-        ORDER BY timestamp ASC
-        """, (user["user_id"], today_str))
-        meals = [dict(r) for r in cursor.fetchall()]
-    except Exception:
-        meals = []
+    if user:
+        try:
+            cursor.execute("""
+            SELECT COALESCE(SUM(estimated_calories), 0) as total_calories,
+                   COALESCE(SUM(protein_g), 0) as total_protein,
+                   COALESCE(SUM(carbs_g), 0) as total_carbs,
+                   COALESCE(SUM(fats_g), 0) as total_fats,
+                   COALESCE(SUM(water_glasses), 0) as total_water
+            FROM nutrition_logs WHERE user_id = ? AND date_str = ?
+            """, (user["user_id"], today_str))
+            row = cursor.fetchone()
+            if row:
+                totals = dict(row)
+        except Exception:
+            pass
 
-    cursor.execute("SELECT daily_calorie_target FROM profiles WHERE user_id = ?", (user["user_id"],))
-    profile = cursor.fetchone()
-    calorie_target = profile["daily_calorie_target"] if profile else 2100
+        try:
+            cursor.execute("""
+            SELECT meal_type, food_description, estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp
+            FROM nutrition_logs WHERE user_id = ? AND date_str = ?
+            ORDER BY timestamp ASC
+            """, (user["user_id"], today_str))
+            meals = [dict(r) for r in cursor.fetchall()]
+        except Exception:
+            pass
+
+        try:
+            cursor.execute("SELECT daily_calorie_target FROM profiles WHERE user_id = ?", (user["user_id"],))
+            profile = cursor.fetchone()
+            if profile and profile["daily_calorie_target"]:
+                calorie_target = profile["daily_calorie_target"]
+        except Exception:
+            pass
 
     conn.close()
     return {
@@ -509,6 +520,18 @@ def get_today_nutrition(user: dict = Depends(get_current_user)):
         "calorie_target": calorie_target,
         "remaining": max(0, calorie_target - totals["total_calories"])
     }
+
+@app.post("/api/nutrition/reset")
+@app.delete("/api/nutrition/today")
+def reset_today_nutrition(user: Optional[dict] = Depends(get_optional_user)):
+    if user:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        today_str = date.today().isoformat()
+        cursor.execute("DELETE FROM nutrition_logs WHERE user_id = ? AND date_str = ?", (user["user_id"], today_str))
+        conn.commit()
+        conn.close()
+    return {"status": "success", "message": "Today's nutrition log has been reset to 0."}
 
 
 @app.get("/api/leaderboard/global")
