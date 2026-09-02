@@ -1,10 +1,17 @@
+import os
 import re
+import json
+import urllib.request
+import urllib.error
 from typing import Dict, Any, Optional
 
 class FitnessCoachChatbot:
     """
-    Intelligent AI Fitness Coach Chatbot tailored for FITBAT warriors.
+    Intelligent AI Fitness Coach Chatbot powered by Google Gemini API
+    with specialized sports biomechanics, nutrition, and workout knowledge.
     """
+
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
     KNOWLEDGE_BASE = [
         {
@@ -49,14 +56,70 @@ class FitnessCoachChatbot:
         },
         {
             "keywords": ["hello", "hi", "hey", "fitbat", "who are you", "help"],
-            "response": "👋 **Greetings Warrior!** I am your **FITBAT AI Coach**. You can ask me about proper exercise form, diet and meal plans, muscle building, fat loss, or tips to dominate the multiplayer Battle Arena. How can I help you today?"
+            "response": "👋 **Greetings Warrior!** I am your **FITBAT AI Coach** powered by Gemini AI. Ask me about custom workouts, diet plans, muscle gain, fat loss, or tactics to win the Battle Arena. What is your fitness goal today?"
         }
     ]
 
     @classmethod
-    def answer(cls, query: str, user_profile: Optional[Dict[str, Any]] = None) -> str:
-        q_lower = query.lower().strip()
+    def call_gemini_api(cls, query: str, user_profile: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        api_key = os.environ.get("GEMINI_API_KEY", "") or cls.GEMINI_API_KEY
+        if not api_key:
+            return None
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
         
+        system_instruction = (
+            "You are FITBAT AI Coach, an expert, encouraging, energetic AI personal trainer and sports scientist "
+            "for the FITBAT Fitness Battles application. Answer questions about workouts, pushup/squat/plank form, "
+            "nutrition, macros, hydration, recovery, and fitness battles in concise, actionable markdown with emoji bullets."
+        )
+
+        user_context = ""
+        if user_profile:
+            user_context = f"\n[User Profile: Age {user_profile.get('age', 22)}, Goal: {user_profile.get('primary_goal', 'Fitness')}, Level: {user_profile.get('fitness_level', 'Intermediate')}]\n"
+
+        prompt = f"{system_instruction}\n{user_context}\nUser Question: {query}"
+
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 400
+            }
+        }
+
+        try:
+            req_data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=req_data,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=6) as response:
+                if response.status == 200:
+                    resp_json = json.loads(response.read().decode("utf-8"))
+                    candidates = resp_json.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            return parts[0].get("text", "").strip()
+        except Exception as e:
+            print(f"[Chatbot] Gemini API call error: {e}")
+            return None
+        return None
+
+    @classmethod
+    def answer(cls, query: str, user_profile: Optional[Dict[str, Any]] = None) -> str:
+        # 1. Try Google Gemini API if configured
+        gemini_response = cls.call_gemini_api(query, user_profile)
+        if gemini_response:
+            return gemini_response
+
+        # 2. Intelligent local sports biomechanics knowledge base
+        q_lower = query.lower().strip()
         for item in cls.KNOWLEDGE_BASE:
             for kw in item["keywords"]:
                 if kw in q_lower:
@@ -67,8 +130,9 @@ class FitnessCoachChatbot:
                     return resp
 
         return (
-            "💪 **FITBAT Coach Tip**: Great question! To maximize your fitness gains, "
-            "focus on three pillars: **Consistent Form** across your 12 daily exercises, "
-            "**Nutrient-Dense Meals** with adequate protein, and **Active Daily Movement** (hitting 7,000+ steps). "
-            "Jump into the Battle Arena or complete a Daily Quest today to keep leveling up!"
+            "💪 **FITBAT AI Coach**: Great fitness question! To maximize your gains and win battles: "
+            "1. **Full Body Form**: Lock into complete range of motion on your pushups and squats. "
+            "2. **Optimal Fuel**: Target 1.6-2.0g protein/kg and keep a slight caloric target aligned with your goal. "
+            "3. **Daily Habit**: Walk 8,000+ steps and complete your daily camera quests. "
+            "Jump into the Battle Arena today to put your strength to the test!"
         )
