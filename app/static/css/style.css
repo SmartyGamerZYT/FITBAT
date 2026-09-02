@@ -515,6 +515,101 @@ body {
     100% { opacity: 0; transform: scale(1) translateY(-60px); }
 }
 
+/* Exercise-Specific Themed Combat Animations */
+.exercise-theme-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    animation: themeTagGlow 1.8s infinite alternate;
+}
+@keyframes themeTagGlow {
+    0% { transform: scale(0.98); opacity: 0.9; }
+    100% { transform: scale(1.03); opacity: 1; filter: brightness(1.2); }
+}
+
+.anim-frog {
+    color: #4ade80 !important;
+    text-shadow: 0 0 18px rgba(74, 222, 128, 0.9) !important;
+    animation: frogLeapRise 1.1s forwards cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+@keyframes frogLeapRise {
+    0% { opacity: 0; transform: scale(0.4) translateY(40px); }
+    35% { opacity: 1; transform: scale(1.3) translateY(-35px); }
+    100% { opacity: 0; transform: scale(1.1) translateY(-90px); }
+}
+
+.anim-pushup {
+    color: #fb923c !important;
+    text-shadow: 0 0 18px rgba(251, 146, 60, 0.9) !important;
+    animation: pushupImpactRise 1.1s forwards ease-out !important;
+}
+@keyframes pushupImpactRise {
+    0% { opacity: 0; transform: scale(1.6) translateY(20px); filter: blur(2px); }
+    30% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+    100% { opacity: 0; transform: scale(0.9) translateY(-60px); }
+}
+
+.anim-squat {
+    color: #facc15 !important;
+    text-shadow: 0 0 18px rgba(250, 204, 21, 0.9) !important;
+    animation: squatStompRise 1.1s forwards cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+@keyframes squatStompRise {
+    0% { opacity: 0; transform: scale(0.6) translateY(30px); }
+    40% { opacity: 1; transform: scale(1.25) translateY(-15px); }
+    100% { opacity: 0; transform: scale(1) translateY(-70px); }
+}
+
+.anim-jack {
+    color: #38bdf8 !important;
+    text-shadow: 0 0 18px rgba(56, 189, 248, 0.9) !important;
+    animation: jackFlashRise 1.1s forwards ease-out !important;
+}
+@keyframes jackFlashRise {
+    0% { opacity: 0; transform: scale(0.5) rotate(-15deg); }
+    25% { opacity: 1; transform: scale(1.3) rotate(15deg); }
+    50% { transform: scale(1.1) rotate(-5deg); }
+    100% { opacity: 0; transform: scale(0.9) translateY(-70px); }
+}
+
+.anim-curl {
+    color: #f472b6 !important;
+    text-shadow: 0 0 18px rgba(244, 114, 182, 0.9) !important;
+    animation: curlPumpRise 1.1s forwards ease-out !important;
+}
+@keyframes curlPumpRise {
+    0% { opacity: 0; transform: scale(0.7); }
+    40% { opacity: 1; transform: scale(1.35); }
+    100% { opacity: 0; transform: scale(1) translateY(-60px); }
+}
+
+.anim-box {
+    color: #f87171 !important;
+    text-shadow: 0 0 18px rgba(248, 113, 113, 0.9) !important;
+    animation: punchSlashRise 0.9s forwards ease-out !important;
+}
+@keyframes punchSlashRise {
+    0% { opacity: 0; transform: scale(0.3) translateX(-30px); }
+    30% { opacity: 1; transform: scale(1.25) translateX(10px); }
+    100% { opacity: 0; transform: scale(0.95) translateY(-60px); }
+}
+
+.anim-plank {
+    color: #60a5fa !important;
+    text-shadow: 0 0 18px rgba(96, 165, 250, 0.9) !important;
+    animation: titanShieldPulse 1.2s forwards ease-out !important;
+}
+@keyframes titanShieldPulse {
+    0% { opacity: 0; transform: scale(0.6); }
+    30% { opacity: 1; transform: scale(1.15); }
+    100% { opacity: 0; transform: scale(1.3); filter: blur(4px); }
+}
+
 .form-feedback-banner {
     position: absolute;
     bottom: 10px; left: 10px; right: 10px;

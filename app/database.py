@@ -19,13 +19,17 @@ def get_db_path() -> str:
         return tmp_db
     return LOCAL_DB_PATH
 
-DB_PATH = get_db_path()
+_db_initialized = False
 
 def get_db_connection():
+    global _db_initialized
     db_file = get_db_path()
     conn = sqlite3.connect(db_file)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.row_factory = sqlite3.Row
+    if not _db_initialized:
+        _db_initialized = True
+        init_db()
     return conn
 
 def init_db():
@@ -175,10 +179,15 @@ def init_db():
         carbs_g REAL DEFAULT 0,
         fats_g REAL DEFAULT 0,
         water_glasses INTEGER DEFAULT 0,
+        water_liters REAL DEFAULT 0,
         timestamp TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
     """)
+    try:
+        cursor.execute("ALTER TABLE nutrition_logs ADD COLUMN water_liters REAL DEFAULT 0")
+    except Exception:
+        pass
 
     # Seed Default Tasks if empty
     cursor.execute("SELECT COUNT(*) as count FROM daily_tasks")

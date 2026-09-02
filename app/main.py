@@ -1,6 +1,6 @@
 import os
 import random
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
@@ -73,6 +73,8 @@ class NutritionLogRequest(BaseModel):
     carbs_g: float = 0
     fats_g: float = 0
     water_glasses: int = 0
+    water_liters: float = 0.0
+    client_timestamp: Optional[str] = None
 
 class ActivityLogRequest(BaseModel):
     steps: int
@@ -466,7 +468,7 @@ def chat_with_coach(req: ChatRequest, user: Optional[dict] = Depends(get_optiona
 
     # If food was detected, auto-log it to nutrition_logs in database
     if food_data:
-        now_str = datetime.now().isoformat()
+        now_str = datetime.now(timezone.utc).isoformat()
         hour = datetime.now().hour
         if hour < 11:
             meal_type = "breakfast"
@@ -477,22 +479,25 @@ def chat_with_coach(req: ChatRequest, user: Optional[dict] = Depends(get_optiona
         else:
             meal_type = "dinner"
 
+        w_liters = food_data.get("water_liters", 0.0) or (food_data.get("water_glasses", 0) * 0.25)
+
         try:
             cursor.execute("""
             INSERT INTO nutrition_logs (user_id, date_str, meal_type, food_description,
-                estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                estimated_calories, protein_g, carbs_g, fats_g, water_glasses, water_liters, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (user_id, today_str, meal_type, req.message,
                   food_data.get("total_calories", 0),
                   food_data.get("total_protein", 0),
                   food_data.get("total_carbs", 0),
                   food_data.get("total_fats", 0),
                   food_data.get("water_glasses", 0),
+                  w_liters,
                   now_str))
         except Exception:
             pass
 
-    now_str = datetime.now().isoformat()
+    now_str = datetime.now(timezone.utc).isoformat()
     try:
         cursor.execute("""
         INSERT INTO chat_history (user_id, sender, message, timestamp)
@@ -510,16 +515,17 @@ def log_nutrition_item(req: NutritionLogRequest, user: Optional[dict] = Depends(
     effective_user = user or get_or_create_guest_user()
     user_id = effective_user["user_id"]
     today_str = date.today().isoformat()
-    now_str = datetime.now().isoformat()
+    now_str = req.client_timestamp or datetime.now(timezone.utc).isoformat()
+    w_liters = req.water_liters or (req.water_glasses * 0.25)
 
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
     INSERT INTO nutrition_logs (user_id, date_str, meal_type, food_description,
-        estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        estimated_calories, protein_g, carbs_g, fats_g, water_glasses, water_liters, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (user_id, today_str, req.meal_type, req.food_description,
-          req.estimated_calories, req.protein_g, req.carbs_g, req.fats_g, req.water_glasses, now_str))
+          req.estimated_calories, req.protein_g, req.carbs_g, req.fats_g, req.water_glasses, w_liters, now_str))
     conn.commit()
     conn.close()
     return {"success": True, "message": "Logged successfully to database"}
@@ -532,9 +538,10 @@ def get_today_nutrition(user: Optional[dict] = Depends(get_optional_user)):
     effective_user = user or get_or_create_guest_user()
     user_id = effective_user["user_id"]
 
-    totals = {"total_calories": 0, "total_protein": 0, "total_carbs": 0, "total_fats": 0, "total_water": 0}
+    totals = {"total_calories": 0, "total_protein": 0, "total_carbs": 0, "total_fats": 0, "total_water": 0.0, "total_water_liters": 0.0}
     meals = []
     calorie_target = 2100
+    water_target = 2.5
 
     try:
         cursor.execute("""
@@ -542,18 +549,22 @@ def get_today_nutrition(user: Optional[dict] = Depends(get_optional_user)):
                COALESCE(SUM(protein_g), 0) as total_protein,
                COALESCE(SUM(carbs_g), 0) as total_carbs,
                COALESCE(SUM(fats_g), 0) as total_fats,
-               COALESCE(SUM(water_glasses), 0) as total_water
+               COALESCE(SUM(water_glasses), 0) as total_water_glasses,
+               COALESCE(SUM(water_liters), 0) as total_water_liters
         FROM nutrition_logs WHERE user_id = ? AND date_str = ?
         """, (user_id, today_str))
         row = cursor.fetchone()
         if row:
             totals = dict(row)
+            if totals.get("total_water_liters", 0) == 0 and totals.get("total_water_glasses", 0) > 0:
+                totals["total_water_liters"] = round(totals["total_water_glasses"] * 0.25, 2)
+            totals["total_water"] = totals.get("total_water_liters", 0.0)
     except Exception:
         pass
 
     try:
         cursor.execute("""
-        SELECT meal_type, food_description, estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp
+        SELECT meal_type, food_description, estimated_calories, protein_g, carbs_g, fats_g, water_glasses, COALESCE(water_liters, 0) as water_liters, timestamp
         FROM nutrition_logs WHERE user_id = ? AND date_str = ?
         ORDER BY timestamp ASC
         """, (user_id, today_str))
@@ -562,10 +573,13 @@ def get_today_nutrition(user: Optional[dict] = Depends(get_optional_user)):
         pass
 
     try:
-        cursor.execute("SELECT daily_calorie_target FROM profiles WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT daily_calorie_target, weight_kg FROM profiles WHERE user_id = ?", (user_id,))
         profile = cursor.fetchone()
-        if profile and profile["daily_calorie_target"]:
-            calorie_target = profile["daily_calorie_target"]
+        if profile:
+            if profile["daily_calorie_target"]:
+                calorie_target = profile["daily_calorie_target"]
+            if profile["weight_kg"]:
+                water_target = round(profile["weight_kg"] * 0.035, 1)
     except Exception:
         pass
 
@@ -574,6 +588,7 @@ def get_today_nutrition(user: Optional[dict] = Depends(get_optional_user)):
         "totals": totals,
         "meals": meals,
         "calorie_target": calorie_target,
+        "water_target": water_target,
         "remaining": max(0, calorie_target - totals["total_calories"])
     }
 
@@ -600,7 +615,7 @@ def get_global_leaderboard():
     SELECT u.id, u.username, u.points, u.xp, u.level, u.streak, p.fitness_score, p.age
     FROM users u
     LEFT JOIN profiles p ON u.id = p.user_id
-    ORDER BY u.points DESC, u.xp DESC
+    ORDER BY u.xp DESC, u.points DESC
     LIMIT 50
     """)
     rows = cursor.fetchall()
@@ -608,12 +623,13 @@ def get_global_leaderboard():
 
     result = []
     for idx, r in enumerate(rows):
+        total_xp = max(r["xp"] or 0, r["points"] or 0)
         result.append({
             "rank": idx + 1,
             "user_id": r["id"],
             "username": r["username"],
-            "points": r["points"],
-            "xp": r["xp"],
+            "points": total_xp,
+            "xp": total_xp,
             "level": r["level"],
             "streak": r["streak"],
             "fitness_score": r["fitness_score"] or 75.0,

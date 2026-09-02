@@ -150,24 +150,25 @@ Rules:
         total_p = 0
         total_c = 0
         total_f = 0
-        water_glasses = 0
-
-        # Check for water intake
+        
+        water_liters = 0.0
         water_patterns = [
-            (r'(\d+)\s*glass(?:es)?\s*(?:of\s*)?water', 'water'),
-            (r'(\d+)\s*litre?s?\s*(?:of\s*)?water', 'water_litre'),
+            (r'([\d.]+)\s*litre?s?\s*(?:of\s*)?water', 'water_litre'),
             (r'(\d+)\s*(?:ml|ML)\s*(?:of\s*)?water', 'water_ml'),
+            (r'(\d+)\s*glass(?:es)?\s*(?:of\s*)?water', 'water_glass'),
         ]
         for pattern, wtype in water_patterns:
             match = re.search(pattern, text_lower)
             if match:
-                qty = int(match.group(1))
+                val = float(match.group(1))
                 if wtype == 'water_litre':
-                    water_glasses = qty * 4
+                    water_liters += val
                 elif wtype == 'water_ml':
-                    water_glasses = max(1, qty // 250)
+                    water_liters += val / 1000.0
                 else:
-                    water_glasses = qty
+                    water_liters += val * 0.25
+        water_liters = round(water_liters, 2)
+        water_glasses = int(round(water_liters / 0.25))
 
         # Check for quantity multipliers
         for food_name, data in FOOD_CALORIES_DB.items():
@@ -197,7 +198,7 @@ Rules:
                 total_c += c
                 total_f += f
 
-        if not found_items and water_glasses == 0:
+        if not found_items and water_liters == 0:
             return None
 
         return {
@@ -206,7 +207,8 @@ Rules:
             "total_protein": round(total_p, 1),
             "total_carbs": round(total_c, 1),
             "total_fats": round(total_f, 1),
-            "water_glasses": water_glasses
+            "water_glasses": water_glasses,
+            "water_liters": water_liters
         }
 
     @classmethod
@@ -218,9 +220,9 @@ Rules:
 
         # If food was detected, build a nutrition response
         if food_data and food_data.get("items"):
-            lines = ["\U0001f37d\ufe0f **Meal Logged!** Here's the breakdown:\n"]
+            lines = ["🍽️ **Meal Logged!** Here's the breakdown:\n"]
             for item in food_data["items"]:
-                lines.append(f"\u2022 **{item['food']}** x{item['qty']} ({item['unit']}): "
+                lines.append(f"• **{item['food']}** x{item['qty']} ({item['unit']}): "
                            f"{item['calories']} kcal | P:{item['protein']}g C:{item['carbs']}g F:{item['fats']}g")
 
             lines.append(f"\n**This Meal Total**: {food_data['total_calories']} kcal | "
@@ -232,27 +234,27 @@ Rules:
                 if user_profile and user_profile.get('daily_calorie_target'):
                     target = user_profile['daily_calorie_target']
                 remaining = max(0, target - consumed)
-                lines.append(f"\n\U0001f4ca **Today's Total**: {round(consumed)} / {round(target)} kcal")
-                lines.append(f"\U0001f3af **Remaining**: {round(remaining)} kcal to go!")
+                lines.append(f"\n📊 **Today's Total**: {round(consumed)} / {round(target)} kcal")
+                lines.append(f"🎯 **Remaining**: {round(remaining)} kcal to go!")
                 if remaining < 200:
-                    lines.append("\n\u2705 You're almost at your daily target! Great job!")
+                    lines.append("\n✅ You're almost at your daily target! Great job!")
                 elif remaining > 800:
-                    lines.append(f"\n\U0001f4a1 You still need **{round(remaining)} kcal** more. Have a protein-rich meal!")
+                    lines.append(f"\n💡 You still need **{round(remaining)} kcal** more. Have a protein-rich meal!")
 
-            if food_data.get('water_glasses', 0) > 0:
-                lines.append(f"\n\U0001f4a7 Water: +{food_data['water_glasses']} glasses logged!")
+            if food_data.get('water_liters', 0) > 0:
+                lines.append(f"\n💧 Water: +{food_data['water_liters']} L logged!")
+            elif food_data.get('water_glasses', 0) > 0:
+                lines.append(f"\n💧 Water: +{food_data['water_glasses'] * 0.25} L logged!")
 
             return "\n".join(lines)
 
-        if food_data and food_data.get('water_glasses', 0) > 0:
-            glasses = food_data['water_glasses']
-            water_total = daily_totals.get('water', 0) + glasses if daily_totals else glasses
-            msg = f"\U0001f4a7 **+{glasses} glasses of water logged!**\nToday's total: **{water_total}/8 glasses** \U0001f964\n"
-            if water_total >= 8:
-                msg += "\u2705 Great hydration!"
-            else:
-                msg += f"Drink **{8 - water_total}** more glasses today!"
-            return msg
+        if food_data and (food_data.get('water_liters', 0) > 0 or food_data.get('water_glasses', 0) > 0):
+            liters = food_data.get('water_liters') or (food_data.get('water_glasses', 0) * 0.25)
+            water_total = round(daily_totals.get('water_liters', 0) + liters, 2) if daily_totals else liters
+            target_l = 2.5
+            return (f"💧 **+{liters} L of water logged!**\n"
+                    f"Today's total: **{water_total} / {target_l} L** 🥤\n"
+                    f"{'✅ Great hydration!' if water_total >= target_l else f'Drink **{round(target_l - water_total, 1)} L** more today!'}")
 
         # Health monitor questions
         if any(w in q for w in ['health', 'monitor', 'daily check', 'check-in', 'health check', 'checkup']):

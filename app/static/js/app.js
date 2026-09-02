@@ -203,10 +203,11 @@ class FitbatApp {
         const loginBtn = document.getElementById("header-login-btn");
 
         if (this.currentUser) {
+            const totalXp = Math.max(this.currentUser.xp || 0, this.currentUser.points || 0);
             document.getElementById("header-username").textContent = this.currentUser.username;
-            document.getElementById("header-points").textContent = `${this.currentUser.points} XP`;
-            document.getElementById("header-coins").textContent = `${this.currentUser.coins} 🪙`;
-            document.getElementById("header-streak").textContent = `🔥 ${this.currentUser.streak}d`;
+            document.getElementById("header-points").textContent = `${totalXp.toLocaleString()} XP`;
+            document.getElementById("header-coins").textContent = `${(this.currentUser.coins || 0).toLocaleString()} 🪙`;
+            document.getElementById("header-streak").textContent = `🔥 ${this.currentUser.streak || 1}d`;
             if (userBadge) userBadge.classList.remove("hidden");
             if (loginBtn) loginBtn.classList.add("hidden");
         } else {
@@ -828,7 +829,11 @@ class FitbatApp {
         if (protEl) protEl.textContent = Math.round(totals.total_protein || 0) + "g";
         if (carbsEl) carbsEl.textContent = Math.round(totals.total_carbs || 0) + "g";
         if (fatsEl) fatsEl.textContent = Math.round(totals.total_fats || 0) + "g";
-        if (waterEl) waterEl.textContent = totals.total_water || 0;
+
+        const waterLiters = totals.total_water_liters !== undefined && totals.total_water_liters !== null ? totals.total_water_liters : (totals.total_water || 0);
+        if (waterEl) waterEl.textContent = `${parseFloat(waterLiters).toFixed(1)} L`;
+        const waterTargetEl = document.getElementById("health-water-target");
+        if (waterTargetEl && data && data.water_target) waterTargetEl.textContent = data.water_target;
 
         const remaining = Math.max(0, target - consumed);
         if (remEl) remEl.textContent = `${remaining} kcal remaining`;
@@ -843,9 +848,24 @@ class FitbatApp {
                 logDiv.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No meals logged yet today. Tell the AI Coach what you ate!</p>';
             } else {
                 logDiv.innerHTML = meals.map(m => {
-                    const mealIcons = { breakfast: "🌅", lunch: "☀️", dinner: "🌙", snack: "🍿" };
+                    const mealIcons = { breakfast: "🌅", lunch: "☀️", dinner: "🌙", snack: "🍿", water: "💧" };
                     const icon = mealIcons[m.meal_type] || "🍽️";
-                    const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+
+                    let timeStr = "";
+                    if (m.timestamp) {
+                        let ts = m.timestamp;
+                        if (typeof ts === "string" && !ts.endsWith("Z") && !ts.includes("+") && ts.length >= 19) {
+                            ts += "Z";
+                        }
+                        try {
+                            timeStr = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        } catch (e) {
+                            timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        }
+                    } else {
+                        timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+
                     return `
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.7rem 1rem; background: var(--bg-card-subtle); border-radius: 12px; border: 1px solid var(--border-color);">
                             <div style="display: flex; align-items: center; gap: 0.7rem;">
@@ -900,10 +920,12 @@ class FitbatApp {
         setTimeout(() => this.loadHealthMonitor(), 1200);
     }
 
-    async logWater(glasses) {
+    async logWater(liters = 0.5) {
         const token = localStorage.getItem("fitbat_token");
         const headers = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const clientTs = new Date().toISOString();
 
         try {
             await fetch("/api/nutrition/log", {
@@ -911,12 +933,14 @@ class FitbatApp {
                 headers: headers,
                 body: JSON.stringify({
                     meal_type: "water",
-                    food_description: `${glasses} glass${glasses > 1 ? 'es' : ''} of water`,
+                    food_description: `${liters} L of water`,
                     estimated_calories: 0,
                     protein_g: 0,
                     carbs_g: 0,
                     fats_g: 0,
-                    water_glasses: glasses
+                    water_glasses: Math.round(liters / 0.25),
+                    water_liters: liters,
+                    client_timestamp: clientTs
                 })
             });
         } catch (e) {
@@ -924,7 +948,7 @@ class FitbatApp {
         }
 
         if (window.chatbotWidget) {
-            window.chatbotWidget.sendMessage(`I drank ${glasses} glass${glasses > 1 ? 'es' : ''} of water`);
+            window.chatbotWidget.sendMessage(`I drank ${liters} litre of water`);
         }
         await this.loadHealthMonitor();
     }

@@ -143,8 +143,31 @@ class BattleArena {
                 document.getElementById("opp-name-display").textContent = this.opponentName;
                 document.getElementById("battle-exercise-display").textContent = this.currentExercise.replace(/_/g, " ").toUpperCase();
                 document.getElementById("battle-age-display").textContent = data.age_group;
+
+                const EX_ANIMS = {
+                    frog_jumps: { icon: "🐸", label: "FROG LEAP!", effectClass: "anim-frog", color: "#10b981", bg: "rgba(16,185,129,0.2)" },
+                    pushups: { icon: "💪", label: "IRON PUMP!", effectClass: "anim-pushup", color: "#f97316", bg: "rgba(249,115,22,0.2)" },
+                    squats: { icon: "🦵", label: "SEISMIC SQUAT!", effectClass: "anim-squat", color: "#eab308", bg: "rgba(234,179,8,0.2)" },
+                    jumping_jacks: { icon: "⚡", label: "THUNDER JACK!", effectClass: "anim-jack", color: "#06b6d4", bg: "rgba(6,182,212,0.2)" },
+                    bicep_curls: { icon: "💥", label: "BICEP SURGE!", effectClass: "anim-curl", color: "#ec4899", bg: "rgba(236,72,153,0.2)" },
+                    shadow_boxing: { icon: "🥊", label: "LIGHTNING STRIKE!", effectClass: "anim-box", color: "#ef4444", bg: "rgba(239,68,68,0.2)" },
+                    plank: { icon: "🛡️", label: "TITAN SHIELD!", effectClass: "anim-plank", color: "#3b82f6", bg: "rgba(59,130,246,0.2)" },
+                    high_knees: { icon: "🏃", label: "SPRINT BLUR!", effectClass: "anim-frog", color: "#8b5cf6", bg: "rgba(139,92,246,0.2)" },
+                    lunges: { icon: "🚶‍♂️", label: "POWER STRIDE!", effectClass: "anim-squat", color: "#14b8a6", bg: "rgba(20,184,166,0.2)" },
+                    shoulder_press: { icon: "🏋️", label: "TITAN PRESS!", effectClass: "anim-pushup", color: "#f59e0b", bg: "rgba(245,158,11,0.2)" },
+                    crunches: { icon: "🍫", label: "CORE CRUNCH!", effectClass: "anim-curl", color: "#f43f5e", bg: "rgba(244,63,94,0.2)" },
+                    mountain_climbers: { icon: "🧗", label: "CLIFF BLITZ!", effectClass: "anim-jack", color: "#6366f1", bg: "rgba(99,102,241,0.2)" },
+                    lateral_raises: { icon: "🦅", label: "EAGLE WING!", effectClass: "anim-plank", color: "#a855f7", bg: "rgba(168,85,247,0.2)" }
+                };
+                const theme = EX_ANIMS[this.currentExercise] || { icon: "⚡", label: "ARENA CLASH", color: "#2563eb", bg: "rgba(37,99,235,0.2)" };
+                const tagEl = document.getElementById("battle-exercise-animation-tag");
+                if (tagEl) {
+                    tagEl.textContent = `${theme.icon} ${theme.label}`;
+                    tagEl.style.color = theme.color;
+                    tagEl.style.background = theme.bg;
+                }
                 
-                this.showBattleOverlay(`MATCH CONNECTED! [${this.currentExercise.replace(/_/g, ' ').toUpperCase()}] 3... 2... 1... FIGHT!`);
+                this.showBattleOverlay(`MATCH CONNECTED! [${theme.icon} ${this.currentExercise.replace(/_/g, ' ').toUpperCase()}] 3... 2... 1... FIGHT!`);
                 this.startTimer(data.duration || 45);
 
                 if (!data.opponent.is_ai) {
@@ -340,7 +363,23 @@ class BattleArena {
             this.screenShake();
         } else {
             if (window.soundEngine) window.soundEngine.playRep();
-            this.spawnCombatEffect("player", "+1 REP! ⚡", false);
+            const EX_LABELS = {
+                frog_jumps: "🐸 LEAP!",
+                pushups: "💪 PUSH!",
+                squats: "🦵 STOMP!",
+                jumping_jacks: "⚡ SURGE!",
+                bicep_curls: "💥 PUMP!",
+                shadow_boxing: "🥊 STRIKE!",
+                plank: "🛡️ HOLD!",
+                high_knees: "🏃 DASH!",
+                lunges: "🚶‍♂️ DRIVE!",
+                shoulder_press: "🏋️ PRESS!",
+                crunches: "🍫 BURN!",
+                mountain_climbers: "🧗 BLITZ!",
+                lateral_raises: "🦅 FLY!"
+            };
+            const label = EX_LABELS[this.currentExercise] || "+1 REP!";
+            this.spawnCombatEffect("player", `${label} ⚡`, false);
         }
 
         this.updatePlayerHUD();
@@ -387,8 +426,25 @@ class BattleArena {
         const container = document.getElementById(target === "player" ? "player-combat-effects" : "opp-combat-effects");
         if (!container) return;
 
+        const EX_CLASSES = {
+            frog_jumps: "anim-frog",
+            pushups: "anim-pushup",
+            squats: "anim-squat",
+            jumping_jacks: "anim-jack",
+            bicep_curls: "anim-curl",
+            shadow_boxing: "anim-box",
+            plank: "anim-plank",
+            high_knees: "anim-frog",
+            lunges: "anim-squat",
+            shoulder_press: "anim-pushup",
+            crunches: "anim-curl",
+            mountain_climbers: "anim-jack",
+            lateral_raises: "anim-plank"
+        };
+        const animClass = EX_CLASSES[this.currentExercise] || "normal-popup";
+
         const el = document.createElement("div");
-        el.className = `combat-popup ${isCrit ? "crit-popup" : "normal-popup"}`;
+        el.className = `combat-popup ${animClass} ${isCrit ? "crit-popup" : ""}`;
         el.textContent = text;
         container.appendChild(el);
 
