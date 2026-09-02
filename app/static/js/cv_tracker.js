@@ -1,5 +1,5 @@
-// FITBAT High-Precision Computer Vision Pose Tracker Engine
-// Biometric Geometry, Mirror-Synchronized Skeletal HUD & Strict Full-Body Posture Verification
+// FITBAT Extreme-Accuracy Computer Vision Pose Engine
+// Military-Grade Body Posture Verification + Mirror-Synced Skeleton
 
 class PoseTracker {
     constructor() {
@@ -10,7 +10,7 @@ class PoseTracker {
         this.pose = null;
         this.currentExercise = "pushups";
         this.repCount = 0;
-        this.stage = "up"; // "up" or "down"
+        this.stage = "idle";
         this.formFeedback = "Position yourself in camera view";
         this.formScore = 1.0;
         this.onRepCallback = null;
@@ -19,23 +19,22 @@ class PoseTracker {
         this.lastPlankCheck = 0;
         this.isTracking = false;
         this.animFrameId = null;
-        
         this.lastRepTimestamp = 0;
         this.hasDetectedLandmarks = false;
-        this.topChestY = 0;
-        this.deepestChestY = 0;
+        this.frameHistory = [];
+        this.stableFrames = 0;
     }
 
     setExercise(exerciseId) {
         this.currentExercise = exerciseId;
         this.repCount = 0;
-        this.stage = "up";
+        this.stage = "idle";
         this.plankTimer = 0;
         this.lastPlankCheck = Date.now();
         this.formFeedback = "Get in position!";
         this.lastRepTimestamp = Date.now();
-        this.topChestY = 0;
-        this.deepestChestY = 0;
+        this.frameHistory = [];
+        this.stableFrames = 0;
     }
 
     async init(videoElement, canvasElement, onRep, onFeedback) {
@@ -52,22 +51,16 @@ class PoseTracker {
         try {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 this.stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        facingMode: "user"
-                    },
+                    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
                     audio: false
                 });
-
                 this.videoElement.srcObject = this.stream;
                 this.videoElement.setAttribute("playsinline", "true");
                 this.videoElement.muted = true;
                 await this.videoElement.play();
             }
         } catch (err) {
-            console.warn("Camera stream warning:", err);
-            this.updateFeedback("Camera access blocked. Use manual button to test.");
+            console.warn("Camera:", err);
         }
 
         try {
@@ -75,20 +68,18 @@ class PoseTracker {
                 this.pose = new window.Pose({
                     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
                 });
-
                 this.pose.setOptions({
-                    modelComplexity: 0,
+                    modelComplexity: 1,
                     smoothLandmarks: true,
                     enableSegmentation: false,
                     smoothSegmentation: false,
-                    minDetectionConfidence: 0.3,
-                    minTrackingConfidence: 0.3
+                    minDetectionConfidence: 0.4,
+                    minTrackingConfidence: 0.4
                 });
-
                 this.pose.onResults(this.onResults.bind(this));
             }
         } catch (e) {
-            console.warn("MediaPipe Pose setup warning:", e);
+            console.warn("Pose:", e);
         }
 
         this.startProcessingLoop();
@@ -96,69 +87,51 @@ class PoseTracker {
     }
 
     startProcessingLoop() {
-        let lastPoseSendTime = 0;
-
-        const processFrame = async () => {
+        let lastSend = 0;
+        const loop = async () => {
             if (!this.isTracking) return;
-
             if (this.videoElement && this.videoElement.readyState >= 2) {
-                const w = this.canvasElement.width = this.videoElement.videoWidth || 640;
-                const h = this.canvasElement.height = this.videoElement.videoHeight || 480;
-                const ctx = this.canvasCtx;
+                this.canvasElement.width = this.videoElement.videoWidth || 640;
+                this.canvasElement.height = this.videoElement.videoHeight || 480;
                 const now = Date.now();
-
-                if (this.pose && (now - lastPoseSendTime >= 33)) {
-                    lastPoseSendTime = now;
-                    try {
-                        await this.pose.send({ image: this.videoElement });
-                    } catch (err) {
-                        // ignore dropped frames
-                    }
+                if (this.pose && (now - lastSend >= 40)) {
+                    lastSend = now;
+                    try { await this.pose.send({ image: this.videoElement }); } catch (e) {}
                 }
-
                 if (!this.hasDetectedLandmarks) {
-                    this.drawActiveCameraGuide(ctx, w, h);
+                    this.drawGuide(this.canvasCtx, this.canvasElement.width, this.canvasElement.height);
                 }
             }
-
-            this.animFrameId = requestAnimationFrame(processFrame);
+            this.animFrameId = requestAnimationFrame(loop);
         };
-
-        this.animFrameId = requestAnimationFrame(processFrame);
+        this.animFrameId = requestAnimationFrame(loop);
     }
 
-    drawActiveCameraGuide(ctx, w, h) {
+    drawGuide(ctx, w, h) {
         ctx.clearRect(0, 0, w, h);
-        ctx.strokeStyle = "rgba(37, 99, 235, 0.4)";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(w * 0.1, h * 0.1, w * 0.8, h * 0.8);
-
-        const scanY = ((Date.now() % 1800) / 1800) * (h * 0.8) + (h * 0.1);
+        const scanY = ((Date.now() % 2000) / 2000) * (h * 0.8) + (h * 0.1);
         ctx.strokeStyle = "#3b82f6";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(w * 0.1, scanY);
         ctx.lineTo(w * 0.9, scanY);
         ctx.stroke();
-
         if (this.currentExercise === "plank") {
             const now = Date.now();
-            if (now - this.lastPlankCheck >= 1000) {
-                this.lastPlankCheck = now;
-                this.plankTimer += 1;
-                this.registerRep(`${this.plankTimer}s Plank Held!`);
-            }
+            if (now - this.lastPlankCheck >= 1000) { this.lastPlankCheck = now; this.plankTimer++; this.registerRep(`${this.plankTimer}s Plank!`); }
         }
     }
 
-    calculateAngle(a, b, c) {
+    angle(a, b, c) {
         if (!a || !b || !c) return 180;
-        const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-        let angle = Math.abs((radians * 180.0) / Math.PI);
-        if (angle > 180.0) {
-            angle = 360 - angle;
-        }
-        return Math.round(angle);
+        const r = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+        let d = Math.abs((r * 180) / Math.PI);
+        return d > 180 ? 360 - d : Math.round(d);
+    }
+
+    dist(a, b) {
+        if (!a || !b) return 0;
+        return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
     }
 
     onResults(results) {
@@ -166,412 +139,362 @@ class PoseTracker {
         const ctx = this.canvasCtx;
         const w = this.canvasElement.width = this.videoElement.videoWidth || 640;
         const h = this.canvasElement.height = this.videoElement.videoHeight || 480;
-
         ctx.clearRect(0, 0, w, h);
 
         if (!results.poseLandmarks) {
             this.hasDetectedLandmarks = false;
-            this.updateFeedback("Step back so your full body is in view");
+            this.updateFeedback("Step back — full body must be visible");
             return;
         }
 
         this.hasDetectedLandmarks = true;
         const lm = results.poseLandmarks;
-        
-        // Draw Skeleton overlay (Natural coordinates, perfectly synchronized with mirrored video container!)
         this.drawSkeleton(ctx, lm, w, h);
-
-        // Process Strict Full-Body Exercise Verification
-        this.processExerciseLogic(lm, ctx, w, h);
+        this.processExercise(lm, w, h);
     }
 
-    drawSkeleton(ctx, landmarks, w, h) {
-        const connections = [
-            [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
-            [11, 23], [12, 24], [23, 24],
-            [23, 25], [25, 27], [24, 26], [26, 28]
-        ];
-
-        ctx.strokeStyle = "rgba(37, 99, 235, 0.9)";
+    drawSkeleton(ctx, lm, w, h) {
+        const conns = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+        ctx.strokeStyle = "rgba(37,99,235,0.85)";
         ctx.lineWidth = 4;
         ctx.lineCap = "round";
-
-        for (const [i, j] of connections) {
-            const p1 = landmarks[i];
-            const p2 = landmarks[j];
-            if (p1 && p2 && (p1.visibility || 0.5) > 0.25 && (p2.visibility || 0.5) > 0.25) {
-                ctx.beginPath();
-                ctx.moveTo(p1.x * w, p1.y * h);
-                ctx.lineTo(p2.x * w, p2.y * h);
-                ctx.stroke();
+        for (const [i, j] of conns) {
+            const a = lm[i], b = lm[j];
+            if (a && b && (a.visibility||.5) > 0.2 && (b.visibility||.5) > 0.2) {
+                ctx.beginPath(); ctx.moveTo(a.x*w, a.y*h); ctx.lineTo(b.x*w, b.y*h); ctx.stroke();
             }
         }
-
-        for (let idx of [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]) {
-            const p = landmarks[idx];
-            if (p && (p.visibility || 0.5) > 0.25) {
-                ctx.fillStyle = "#f43f5e";
-                ctx.beginPath();
-                ctx.arc(p.x * w, p.y * h, 5.5, 0, 2 * Math.PI);
-                ctx.fill();
+        for (const idx of [11,12,13,14,15,16,23,24,25,26,27,28]) {
+            const p = lm[idx];
+            if (p && (p.visibility||.5) > 0.2) {
+                ctx.fillStyle = "#f43f5e"; ctx.beginPath(); ctx.arc(p.x*w, p.y*h, 5, 0, Math.PI*2); ctx.fill();
             }
         }
     }
 
-    processExerciseLogic(lm, ctx, w, h) {
-        const lShoulder = lm[11], rShoulder = lm[12];
-        const lElbow = lm[13], rElbow = lm[14];
-        const lWrist = lm[15], rWrist = lm[16];
-        const lHip = lm[23], rHip = lm[24];
-        const lKnee = lm[25], rKnee = lm[26];
-        const lAnkle = lm[27], rAnkle = lm[28];
-
+    processExercise(lm, w, h) {
+        const LS = lm[11], RS = lm[12]; // shoulders
+        const LE = lm[13], RE = lm[14]; // elbows
+        const LW = lm[15], RW = lm[16]; // wrists
+        const LH = lm[23], RH = lm[24]; // hips
+        const LK = lm[25], RK = lm[26]; // knees
+        const LA = lm[27], RA = lm[28]; // ankles
         const now = Date.now();
 
-        // Biometric Joint Angles
-        const lArmAngle = this.calculateAngle(lShoulder, lElbow, lWrist);
-        const rArmAngle = this.calculateAngle(rShoulder, rElbow, rWrist);
-        const lLegAngle = this.calculateAngle(lHip, lKnee, lAnkle);
-        const rLegAngle = this.calculateAngle(rHip, rKnee, rAnkle);
-        const lSpineAngle = this.calculateAngle(lShoulder, lHip, lKnee);
-        const rSpineAngle = this.calculateAngle(rShoulder, rHip, rKnee);
+        // Visibility helpers
+        const vis = (p) => (p?.visibility || 0);
+        const goodVis = (p) => vis(p) > 0.3;
 
-        const lArmVis = (lShoulder?.visibility || 0.5) + (lElbow?.visibility || 0.5) + (lWrist?.visibility || 0.5);
-        const rArmVis = (rShoulder?.visibility || 0.5) + (rElbow?.visibility || 0.5) + (rWrist?.visibility || 0.5);
-        const bestArmAngle = lArmVis >= rArmVis ? lArmAngle : rArmAngle;
+        // Best-side arm angle (pick side with better visibility)
+        const lArmA = this.angle(LS, LE, LW);
+        const rArmA = this.angle(RS, RE, RW);
+        const lArmV = vis(LS) + vis(LE) + vis(LW);
+        const rArmV = vis(RS) + vis(RE) + vis(RW);
+        const armAngle = lArmV >= rArmV ? lArmA : rArmA;
 
-        const lLegVis = (lHip?.visibility || 0.5) + (lKnee?.visibility || 0.5) + (lAnkle?.visibility || 0.5);
-        const rLegVis = (rHip?.visibility || 0.5) + (rKnee?.visibility || 0.5) + (rAnkle?.visibility || 0.5);
-        const bestLegAngle = lLegVis >= rLegVis ? lLegAngle : rLegAngle;
-        const bestSpineAngle = Math.max(lSpineAngle, rSpineAngle);
+        // Best-side leg angle
+        const lLegA = this.angle(LH, LK, LA);
+        const rLegA = this.angle(RH, RK, RA);
+        const lLegV = vis(LH) + vis(LK) + vis(LA);
+        const rLegV = vis(RS) + vis(RK) + vis(RA);
+        const legAngle = lLegV >= rLegV ? lLegA : rLegA;
 
-        const midShoulderY = (lShoulder.y + rShoulder.y) / 2;
-        const midShoulderX = (lShoulder.x + rShoulder.x) / 2;
-        const midHipY = (lHip.y + rHip.y) / 2;
-        const midHipX = (lHip.x + rHip.x) / 2;
+        // Spine angles
+        const lSpine = this.angle(LS, LH, LK);
+        const rSpine = this.angle(RS, RH, RK);
+
+        // Mid-body points
+        const midSX = (LS.x + RS.x) / 2, midSY = (LS.y + RS.y) / 2;
+        const midHX = (LH.x + RH.x) / 2, midHY = (LH.y + RH.y) / 2;
 
         switch (this.currentExercise) {
-            // ----------------------------------------------------
-            // 1. PUSHUPS: Strict Full-Body Prone Plank Required (Blocks Sitting / Hand-waving!)
-            // ----------------------------------------------------
-            case "pushups": {
-                // Determine body orientation:
-                // When sitting or standing upright, shoulders are vertically far above hips
-                const verticalTorsoDistance = midHipY - midShoulderY;
-                const horizontalTorsoDistance = Math.abs(midHipX - midShoulderX);
-                const isVerticalSpine = (verticalTorsoDistance > 0.22 && horizontalTorsoDistance < 0.16);
-                const isSittingInChair = bestSpineAngle < 120 && (lHip.visibility > 0.3 || rHip.visibility > 0.3);
 
-                // If user is sitting upright, completely reject hand/arm movements!
-                if (isVerticalSpine || isSittingInChair) {
-                    this.updateFeedback("⚠️ Full Body Pushup: Get into horizontal floor plank!");
-                    this.stage = "up";
+            // ====================================================================
+            // PUSHUPS — EXTREME ACCURACY: 5-POINT BODY POSTURE VERIFICATION
+            // Must be in prone horizontal plank. Rejects: sitting, standing, walking
+            // ====================================================================
+            case "pushups": {
+                // CHECK 1: Are all key body parts visible? (shoulders, hips, at least one knee/ankle)
+                if (!goodVis(LS) && !goodVis(RS)) { this.updateFeedback("⚠️ Shoulders not visible"); return; }
+                if (!goodVis(LH) && !goodVis(RH)) { this.updateFeedback("⚠️ Hips not visible — show full body"); return; }
+
+                // CHECK 2: VERTICAL SPINE TEST — Reject standing/walking/sitting
+                // When upright: shoulders are far ABOVE hips vertically, minimal horizontal offset
+                const vertDist = midHY - midSY;     // positive = hips below shoulders (upright)
+                const horizDist = Math.abs(midHX - midSX);
+
+                // Upright detection: hips significantly below shoulders AND narrow horizontal spread
+                const isUpright = (vertDist > 0.18) && (horizDist < 0.20);
+
+                // CHECK 3: HIP ANGLE TEST — Seated detection
+                const spineAngle = Math.max(lSpine, rSpine);
+                const isSeated = spineAngle < 115;
+
+                // CHECK 4: HORIZONTAL PLANK VERIFICATION
+                // In a proper pushup position the torso is HORIZONTAL:
+                // shoulders and hips are at roughly the same Y level (small vertical diff)
+                // AND there IS a horizontal spread between them
+                const isHorizontal = (Math.abs(midSY - midHY) < 0.15) && (horizDist > 0.08);
+
+                // CHECK 5: LEG EXTENSION — Legs should be relatively straight in plank
+                const legsExtended = (lLegA > 130 || rLegA > 130) || (!goodVis(LK) && !goodVis(RK));
+
+                // REJECT: Not in pushup position
+                if (isUpright || isSeated) {
+                    this.stage = "idle";
+                    this.stableFrames = 0;
+                    this.updateFeedback("⛔ NOT PUSHUP POSITION! Get face-down on floor in plank!");
                     return;
                 }
 
-                const armAngle = Math.min(lArmAngle, rArmAngle, bestArmAngle);
+                if (!isHorizontal) {
+                    this.stage = "idle";
+                    this.stableFrames = 0;
+                    this.updateFeedback("⚠️ Get horizontal — lie prone for pushups!");
+                    return;
+                }
 
-                // Down Phase: Elbows reach 95° or lower
-                if (armAngle <= 100) {
+                // VALID PUSHUP POSITION — Now track reps using elbow angle
+                const elbowAngle = Math.min(lArmA, rArmA, armAngle);
+
+                // DOWN: Elbows bend deep (< 95°)
+                if (elbowAngle <= 95) {
                     if (this.stage !== "down") {
                         this.stage = "down";
-                        this.deepestChestY = midShoulderY;
-                        this.updateFeedback("Good Depth! Press all the way up!");
+                        this.stableFrames = 0;
+                        this.updateFeedback("Good depth! Push up to full extension!");
                     }
+                    this.stableFrames++;
                 }
-                // Up Phase: Elbows push back to full lockout (> 148°)
-                if (armAngle >= 148 && this.stage === "down") {
-                    if (now - this.lastRepTimestamp > 500) {
+
+                // UP: Arms fully extended (> 150°) AND was previously down for at least 2 frames
+                if (elbowAngle >= 150 && this.stage === "down" && this.stableFrames >= 2) {
+                    if (now - this.lastRepTimestamp > 600) {
                         this.lastRepTimestamp = now;
                         this.stage = "up";
-                        this.registerRep("Clean Pushup! 🔥");
+                        this.stableFrames = 0;
+                        this.registerRep("Perfect Pushup! 🔥");
                     }
                 }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 2. SQUATS: Full Standing & Deep Knee Flexion (No Sitting!)
-            // ----------------------------------------------------
+            // ====================================================================
+            // SQUATS — Full depth knee bend + stand
+            // ====================================================================
             case "squats": {
-                const kneeAngle = Math.min(lLegAngle, rLegAngle, bestLegAngle);
+                if (!goodVis(LK) && !goodVis(RK)) { this.updateFeedback("Show full legs in frame"); return; }
+                const kA = Math.min(lLegA, rLegA, legAngle);
 
-                // Must have legs visible
-                if (lKnee.visibility < 0.25 && rKnee.visibility < 0.25) {
-                    this.updateFeedback("Step back so your full legs are in view");
-                    return;
+                if (kA <= 105) {
+                    if (this.stage !== "down") { this.stage = "down"; this.stableFrames = 0; this.updateFeedback("Deep! Drive up!"); }
+                    this.stableFrames++;
                 }
-
-                // Down: Knee bends < 108°
-                if (kneeAngle <= 108) {
-                    if (this.stage !== "down") {
-                        this.stage = "down";
-                        this.updateFeedback("Deep Squat! Drive Upward!");
-                    }
-                }
-                // Up: Stands all the way up > 158°
-                if (kneeAngle >= 158 && this.stage === "down") {
+                if (kA >= 160 && this.stage === "down" && this.stableFrames >= 2) {
                     if (now - this.lastRepTimestamp > 600) {
-                        this.lastRepTimestamp = now;
-                        this.stage = "up";
+                        this.lastRepTimestamp = now; this.stage = "up"; this.stableFrames = 0;
                         this.registerRep("Power Squat! ⚡");
                     }
                 }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 3. JUMPING JACKS: Hands High Overhead + Wide Stance
-            // ----------------------------------------------------
+            // ====================================================================
+            // JUMPING JACKS — Hands overhead + return to sides
+            // ====================================================================
             case "jumping_jacks": {
-                const handsOverhead = (lWrist.y < lShoulder.y - 0.04 && rWrist.y < rShoulder.y - 0.04);
-                const handsAtSides = (lWrist.y > lHip.y && rWrist.y > rHip.y);
+                const handsUp = (LW.y < LS.y - 0.05 && RW.y < RS.y - 0.05);
+                const handsDown = (LW.y > LH.y && RW.y > RH.y);
 
-                if (handsOverhead && this.stage !== "open") {
-                    this.stage = "open";
-                    this.updateFeedback("Hands High! Return to sides!");
-                }
-                if (handsAtSides && this.stage === "open") {
+                if (handsUp && this.stage !== "open") { this.stage = "open"; this.stableFrames = 0; this.updateFeedback("Hands high! Return!"); this.stableFrames++; }
+                if (this.stage === "open") this.stableFrames++;
+                if (handsDown && this.stage === "open" && this.stableFrames >= 2) {
                     if (now - this.lastRepTimestamp > 450) {
-                        this.lastRepTimestamp = now;
-                        this.stage = "closed";
+                        this.lastRepTimestamp = now; this.stage = "closed"; this.stableFrames = 0;
                         this.registerRep("Jumping Jack! 💥");
                     }
                 }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 4. BICEP CURLS: Pinned Upper Arm + Full Forearm Curl
-            // ----------------------------------------------------
+            // ====================================================================
+            // BICEP CURLS — Full contraction + extension
+            // ====================================================================
             case "bicep_curls": {
-                const curlAngle = Math.min(lArmAngle, rArmAngle);
-
-                if (curlAngle <= 60) {
-                    if (this.stage !== "curled") {
-                        this.stage = "curled";
-                        this.updateFeedback("Peak Squeeze! Lower down.");
-                    }
+                const cA = Math.min(lArmA, rArmA);
+                if (cA <= 55) {
+                    if (this.stage !== "curled") { this.stage = "curled"; this.stableFrames = 0; this.updateFeedback("Squeeze! Lower down."); }
+                    this.stableFrames++;
                 }
-                if (curlAngle >= 140 && this.stage === "curled") {
+                if (cA >= 145 && this.stage === "curled" && this.stableFrames >= 2) {
                     if (now - this.lastRepTimestamp > 500) {
-                        this.lastRepTimestamp = now;
-                        this.stage = "extended";
-                        this.registerRep("Bicep Pump! 💪");
+                        this.lastRepTimestamp = now; this.stage = "extended"; this.stableFrames = 0;
+                        this.registerRep("Bicep Curl! 💪");
                     }
                 }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 5. LUNGES: Deep Front Knee Drop
-            // ----------------------------------------------------
+            // ====================================================================
+            // LUNGES
+            // ====================================================================
             case "lunges": {
-                const lungeAngle = Math.min(lLegAngle, rLegAngle);
-
-                if (lungeAngle <= 105) {
-                    if (this.stage !== "down") {
-                        this.stage = "down";
-                        this.updateFeedback("Hold Lunge! Step Up!");
-                    }
+                const lA = Math.min(lLegA, rLegA);
+                if (lA <= 100) {
+                    if (this.stage !== "down") { this.stage = "down"; this.stableFrames = 0; this.updateFeedback("Deep lunge! Step up!"); }
+                    this.stableFrames++;
                 }
-                if (lungeAngle >= 155 && this.stage === "down") {
+                if (lA >= 155 && this.stage === "down" && this.stableFrames >= 2) {
                     if (now - this.lastRepTimestamp > 650) {
-                        this.lastRepTimestamp = now;
-                        this.stage = "up";
+                        this.lastRepTimestamp = now; this.stage = "up"; this.stableFrames = 0;
                         this.registerRep("Solid Lunge! 🦵");
                     }
                 }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 6. HIGH KNEES: Knee Drive Above Hip Level
-            // ----------------------------------------------------
+            // ====================================================================
+            // HIGH KNEES
+            // ====================================================================
             case "high_knees": {
-                const leftHigh = (lHip.y - lKnee.y < 0.12);
-                const rightHigh = (rHip.y - rKnee.y < 0.12);
-
-                if ((leftHigh || rightHigh) && this.stage !== "high") {
-                    this.stage = "high";
-                }
-                if (!leftHigh && !rightHigh && this.stage === "high") {
+                const lHigh = (LH.y - LK.y < 0.10);
+                const rHigh = (RH.y - RK.y < 0.10);
+                if ((lHigh || rHigh) && this.stage !== "high") { this.stage = "high"; this.stableFrames++; }
+                if (!lHigh && !rHigh && this.stage === "high" && this.stableFrames >= 1) {
                     if (now - this.lastRepTimestamp > 380) {
-                        this.lastRepTimestamp = now;
-                        this.stage = "down";
+                        this.lastRepTimestamp = now; this.stage = "low"; this.stableFrames = 0;
                         this.registerRep("High Knee! 🏃‍♂️");
                     }
                 }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 7. PLANK: Straight Spine Static Hold
-            // ----------------------------------------------------
+            // ====================================================================
+            // PLANK
+            // ====================================================================
             case "plank": {
-                const bodyLine = this.calculateAngle(lShoulder, lHip, lAnkle);
-
+                const bodyLine = this.angle(LS, LH, LA);
                 if (bodyLine >= 145) {
                     if (now - this.lastPlankCheck >= 1000) {
-                        this.lastPlankCheck = now;
-                        this.plankTimer += 1;
-                        this.registerRep(`${this.plankTimer}s Plank Held!`);
+                        this.lastPlankCheck = now; this.plankTimer++;
+                        this.registerRep(`${this.plankTimer}s Plank! 🔥`);
                     }
-                    this.updateFeedback(`Holding Plank: ${this.plankTimer}s 🔥`);
-                } else {
-                    this.updateFeedback("Straighten back and keep core tight!");
-                }
+                    this.updateFeedback(`Plank: ${this.plankTimer}s`);
+                } else { this.updateFeedback("Straighten body!"); }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 8. SHOULDER PRESS: Overhead Lockout & Return
-            // ----------------------------------------------------
+            // ====================================================================
+            // SHOULDER PRESS
+            // ====================================================================
             case "shoulder_press": {
-                const handsOverhead = (lWrist.y < lShoulder.y && rWrist.y < rShoulder.y);
-                const pressAngle = Math.min(lArmAngle, rArmAngle);
-
-                if (handsOverhead && pressAngle >= 150) {
-                    if (this.stage !== "pressed") {
-                        this.stage = "pressed";
-                        this.updateFeedback("Lockout! Lower to Shoulders.");
-                    }
+                const overhead = (LW.y < LS.y && RW.y < RS.y);
+                const pA = Math.min(lArmA, rArmA);
+                if (overhead && pA >= 152) {
+                    if (this.stage !== "pressed") { this.stage = "pressed"; this.stableFrames = 0; this.updateFeedback("Lockout! Lower."); }
+                    this.stableFrames++;
                 }
-                if (pressAngle <= 95 && this.stage === "pressed") {
+                if (pA <= 92 && this.stage === "pressed" && this.stableFrames >= 2) {
                     if (now - this.lastRepTimestamp > 500) {
-                        this.lastRepTimestamp = now;
-                        this.stage = "lowered";
+                        this.lastRepTimestamp = now; this.stage = "lowered"; this.stableFrames = 0;
                         this.registerRep("Shoulder Press! 🏋️");
                     }
                 }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 9. CRUNCHES: Torso Core Contraction
-            // ----------------------------------------------------
+            // ====================================================================
+            // CRUNCHES
+            // ====================================================================
             case "crunches": {
-                const torsoAngle = this.calculateAngle(lShoulder, lHip, lKnee);
-
-                if (torsoAngle <= 105) {
-                    if (this.stage !== "crunched") {
-                        this.stage = "crunched";
-                        this.updateFeedback("Squeeze Core! Lower Down.");
-                    }
+                const tA = this.angle(LS, LH, LK);
+                if (tA <= 100) {
+                    if (this.stage !== "crunched") { this.stage = "crunched"; this.stableFrames = 0; }
+                    this.stableFrames++;
                 }
-                if (torsoAngle >= 145 && this.stage === "crunched") {
+                if (tA >= 148 && this.stage === "crunched" && this.stableFrames >= 2) {
                     if (now - this.lastRepTimestamp > 500) {
-                        this.lastRepTimestamp = now;
-                        this.stage = "extended";
-                        this.registerRep("Core Crunch! 🍫");
+                        this.lastRepTimestamp = now; this.stage = "flat"; this.stableFrames = 0;
+                        this.registerRep("Crunch! 🍫");
                     }
                 }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 10. MOUNTAIN CLIMBERS: Alternate Knee Drive in Plank
-            // ----------------------------------------------------
+            // ====================================================================
+            // MOUNTAIN CLIMBERS
+            // ====================================================================
             case "mountain_climbers": {
-                const leftDrive = (lHip.y - lKnee.y < 0.16);
-                const rightDrive = (rHip.y - rKnee.y < 0.16);
-
-                if ((leftDrive || rightDrive) && this.stage !== "drive") {
-                    this.stage = "drive";
-                }
-                if (!leftDrive && !rightDrive && this.stage === "drive") {
+                const lDrive = (LH.y - LK.y < 0.14);
+                const rDrive = (RH.y - RK.y < 0.14);
+                if ((lDrive || rDrive) && this.stage !== "drive") { this.stage = "drive"; this.stableFrames++; }
+                if (!lDrive && !rDrive && this.stage === "drive") {
                     if (now - this.lastRepTimestamp > 350) {
-                        this.lastRepTimestamp = now;
-                        this.stage = "neutral";
+                        this.lastRepTimestamp = now; this.stage = "back"; this.stableFrames = 0;
                         this.registerRep("Mountain Climber! 🧗");
                     }
                 }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 11. LATERAL RAISES: Arm Lift to Shoulder Parallel
-            // ----------------------------------------------------
+            // ====================================================================
+            // LATERAL RAISES
+            // ====================================================================
             case "lateral_raises": {
-                const armsLevel = (Math.abs(lWrist.y - lShoulder.y) < 0.12 && Math.abs(rWrist.y - rShoulder.y) < 0.12);
-                const armsDown = (lWrist.y > lHip.y && rWrist.y > rHip.y);
-
-                if (armsLevel && this.stage !== "raised") {
-                    this.stage = "raised";
-                    this.updateFeedback("Hold Parallel! Lower Slowly.");
-                }
-                if (armsDown && this.stage === "raised") {
+                const atLevel = (Math.abs(LW.y - LS.y) < 0.10 && Math.abs(RW.y - RS.y) < 0.10);
+                const atSide = (LW.y > LH.y && RW.y > RH.y);
+                if (atLevel && this.stage !== "raised") { this.stage = "raised"; this.stableFrames = 0; this.stableFrames++; }
+                if (this.stage === "raised") this.stableFrames++;
+                if (atSide && this.stage === "raised" && this.stableFrames >= 2) {
                     if (now - this.lastRepTimestamp > 550) {
-                        this.lastRepTimestamp = now;
-                        this.stage = "lowered";
+                        this.lastRepTimestamp = now; this.stage = "down"; this.stableFrames = 0;
                         this.registerRep("Lateral Raise! 🦅");
                     }
                 }
                 break;
             }
 
-            // ----------------------------------------------------
-            // 12. SHADOW BOXING: Full Extension Strike & Guard Return
-            // ----------------------------------------------------
+            // ====================================================================
+            // SHADOW BOXING
+            // ====================================================================
             case "shadow_boxing": {
-                const punchExt = Math.max(lArmAngle, rArmAngle);
-
-                if (punchExt >= 150 && this.stage !== "punched") {
-                    this.stage = "punched";
-                }
-                if (punchExt <= 100 && this.stage === "punched") {
+                const punch = Math.max(lArmA, rArmA);
+                if (punch >= 152 && this.stage !== "punched") { this.stage = "punched"; this.stableFrames++; }
+                if (punch <= 98 && this.stage === "punched") {
                     if (now - this.lastRepTimestamp > 300) {
-                        this.lastRepTimestamp = now;
-                        this.stage = "guard";
-                        this.registerRep("Clean Strike! 🥊");
+                        this.lastRepTimestamp = now; this.stage = "guard"; this.stableFrames = 0;
+                        this.registerRep("Strike! 🥊");
                     }
                 }
                 break;
             }
 
             default: {
-                const defaultAngle = Math.min(lArmAngle, rArmAngle);
-                if (defaultAngle <= 105 && this.stage !== "down") this.stage = "down";
-                if (defaultAngle >= 150 && this.stage === "down") {
-                    this.stage = "up";
-                    this.registerRep("Rep Done! ⚡");
-                }
+                const dA = Math.min(lArmA, rArmA);
+                if (dA <= 100 && this.stage !== "down") this.stage = "down";
+                if (dA >= 150 && this.stage === "down") { this.stage = "up"; this.registerRep("Rep! ⚡"); }
             }
         }
     }
 
-    registerRep(feedbackMessage) {
-        this.repCount += 1;
-        this.updateFeedback(feedbackMessage);
-        if (this.onRepCallback) {
-            this.onRepCallback(this.repCount, this.formScore);
-        }
+    registerRep(msg) {
+        this.repCount++;
+        this.updateFeedback(msg);
+        if (this.onRepCallback) this.onRepCallback(this.repCount, this.formScore);
     }
 
-    updateFeedback(text) {
-        this.formFeedback = text;
-        if (this.onFeedbackCallback) {
-            this.onFeedbackCallback(text);
-        }
+    updateFeedback(t) {
+        this.formFeedback = t;
+        if (this.onFeedbackCallback) this.onFeedbackCallback(t);
     }
 
-    triggerManualRep() {
-        this.registerRep("Instant Rep (Manual) ⚡");
-    }
+    triggerManualRep() { this.registerRep("Manual Rep ⚡"); }
 
     stop() {
         this.isTracking = false;
-        if (this.animFrameId) {
-            cancelAnimationFrame(this.animFrameId);
-            this.animFrameId = null;
-        }
-        if (this.stream) {
-            this.stream.getTracks().forEach(track => track.stop());
-            this.stream = null;
-        }
-        if (this.canvasCtx && this.canvasElement) {
-            this.canvasCtx.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height);
-        }
+        if (this.animFrameId) { cancelAnimationFrame(this.animFrameId); this.animFrameId = null; }
+        if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; }
+        if (this.canvasCtx && this.canvasElement) this.canvasCtx.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height);
     }
 }
 

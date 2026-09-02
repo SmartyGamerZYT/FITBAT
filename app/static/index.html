@@ -33,6 +33,7 @@
             <button class="nav-link" data-nav="tasks" id="nav-tasks">🎯 Daily Quests</button>
             <button class="nav-link" data-nav="activity" id="nav-activity">👟 Step Monitor</button>
             <button class="nav-link" data-nav="leaderboard" id="nav-leaderboard">🏆 Leaderboards</button>
+            <button class="nav-link" data-nav="health" id="nav-health">🩺 Health Monitor</button>
         </nav>
 
         <div style="display: flex; align-items: center; gap: 0.8rem;">
@@ -377,6 +378,74 @@
             </div>
         </section>
 
+        <!-- VIEW: DAILY HEALTH MONITOR -->
+        <section id="view-health" class="app-view">
+            <div style="margin-bottom: 1.5rem;">
+                <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">🩺 Daily Health Monitor</h1>
+                <p style="color: var(--text-secondary);">Track your meals, hydration, and calories. The AI Coach calculates everything automatically!</p>
+            </div>
+
+            <!-- Today's Summary Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                <div class="glass-card" style="text-align: center; border-top: 4px solid var(--coral);">
+                    <span class="stat-label">Calories</span>
+                    <div class="stat-value" id="health-cal-consumed" style="color: var(--coral);">0</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">/ <span id="health-cal-target">2100</span> kcal</div>
+                </div>
+                <div class="glass-card" style="text-align: center; border-top: 4px solid var(--emerald);">
+                    <span class="stat-label">Protein</span>
+                    <div class="stat-value" id="health-protein" style="color: var(--emerald);">0g</div>
+                </div>
+                <div class="glass-card" style="text-align: center; border-top: 4px solid var(--blue);">
+                    <span class="stat-label">Carbs</span>
+                    <div class="stat-value" id="health-carbs" style="color: var(--blue);">0g</div>
+                </div>
+                <div class="glass-card" style="text-align: center; border-top: 4px solid var(--amber);">
+                    <span class="stat-label">Fats</span>
+                    <div class="stat-value" id="health-fats" style="color: var(--amber);">0g</div>
+                </div>
+                <div class="glass-card" style="text-align: center; border-top: 4px solid #0284c7;">
+                    <span class="stat-label">Water</span>
+                    <div class="stat-value" id="health-water" style="color: #0284c7;">0</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">/ 8 glasses</div>
+                </div>
+            </div>
+
+            <!-- Calorie Progress Bar -->
+            <div class="glass-card" style="margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <strong style="font-family: var(--font-heading);">🔥 Calorie Progress</strong>
+                    <span id="health-cal-remaining" style="font-weight: 800; color: var(--blue);">2100 kcal remaining</span>
+                </div>
+                <div class="task-progress-bar-wrap" style="height: 14px;">
+                    <div class="task-progress-fill" id="health-cal-progress" style="width: 0%; background: linear-gradient(90deg, var(--emerald), var(--amber), var(--coral));"></div>
+                </div>
+            </div>
+
+            <!-- Quick Log Section -->
+            <div class="glass-card" style="margin-bottom: 1.5rem;">
+                <h3 style="font-family: var(--font-heading); margin-bottom: 0.8rem;">🍽️ Quick Food & Hydration Log</h3>
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 0.8rem;">Type what you ate or drank and the AI will calculate calories, protein, carbs & fats automatically!</p>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="health-food-input" placeholder="e.g., 2 eggs, 1 banana, 1 glass milk" style="flex: 1; padding: 0.7rem; border: 1px solid var(--border-color); border-radius: 10px; font-size: 0.95rem; outline: none;">
+                    <button class="btn-primary" onclick="window.app.logHealthFood()">Log Meal 📝</button>
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap;">
+                    <button class="ex-category-badge" style="cursor: pointer; padding: 0.4rem 0.8rem;" onclick="window.app.logWater(1)">+1 💧 Water</button>
+                    <button class="ex-category-badge" style="cursor: pointer; padding: 0.4rem 0.8rem;" onclick="window.app.logWater(2)">+2 💧 Water</button>
+                    <button class="ex-category-badge" style="cursor: pointer; padding: 0.4rem 0.8rem;" onclick="window.app.startHealthCheckIn()">🩺 AI Health Check-In</button>
+                </div>
+            </div>
+
+            <!-- Today's Meal Log -->
+            <div class="glass-card">
+                <h3 style="font-family: var(--font-heading); margin-bottom: 0.8rem;">📋 Today's Meal History</h3>
+                <div id="health-meal-log" style="display: flex; flex-direction: column; gap: 0.6rem;">
+                    <p style="color: var(--text-muted); font-style: italic;">No meals logged yet today. Tell the AI Coach what you ate!</p>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <!-- Modal 1: Private Arena Waiting Dialog with Arena ID & Copy -->
@@ -445,7 +514,8 @@
         <div style="padding: 0.5rem 0.8rem; display: flex; gap: 0.4rem; overflow-x: auto; background: var(--bg-card-subtle);">
             <button class="ex-category-badge" style="cursor: pointer;" onclick="window.chatbotWidget.sendMessage('How to do proper pushups?')">Pushup Form</button>
             <button class="ex-category-badge" style="cursor: pointer;" onclick="window.chatbotWidget.sendMessage('What diet is best for fat loss?')">Fat Loss Diet</button>
-            <button class="ex-category-badge" style="cursor: pointer;" onclick="window.chatbotWidget.sendMessage('Tips to win battles?')">Battle Strategy</button>
+            <button class="ex-category-badge" style="cursor: pointer;" onclick="window.chatbotWidget.sendMessage('health check')">🩺 Health Check</button>
+            <button class="ex-category-badge" style="cursor: pointer;" onclick="window.chatbotWidget.sendMessage('what did I eat today?')">📊 My Calories</button>
         </div>
         <div class="chat-input-area">
             <input type="text" id="chat-input-field" placeholder="Ask form, diet, or training advice...">

@@ -162,6 +162,24 @@ def init_db():
     )
     """)
 
+    # Daily Nutrition Logs (Health Monitor)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS nutrition_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        date_str TEXT NOT NULL,
+        meal_type TEXT NOT NULL,
+        food_description TEXT NOT NULL,
+        estimated_calories REAL DEFAULT 0,
+        protein_g REAL DEFAULT 0,
+        carbs_g REAL DEFAULT 0,
+        fats_g REAL DEFAULT 0,
+        water_glasses INTEGER DEFAULT 0,
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+
     # Seed Default Tasks if empty
     cursor.execute("SELECT COUNT(*) as count FROM daily_tasks")
     if cursor.fetchone()["count"] == 0:

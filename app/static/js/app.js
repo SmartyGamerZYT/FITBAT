@@ -64,6 +64,8 @@ class FitbatApp {
             this.loadLeaderboards();
         } else if (viewName === "activity") {
             this.loadTodayActivity();
+        } else if (viewName === "health") {
+            this.loadHealthMonitor();
         } else if (viewName === "battle_select") {
             this.renderBattleSelect();
         }
@@ -584,6 +586,100 @@ class FitbatApp {
         } catch (e) {
             console.error("Failed to load exercise leaderboard", e);
         }
+    }
+
+    async loadHealthMonitor() {
+        const token = localStorage.getItem("fitbat_token");
+        if (!token) {
+            this.showAuthModal("login");
+            return;
+        }
+
+        try {
+            const res = await fetch("/api/nutrition/today", {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            const t = data.totals || {};
+            const consumed = Math.round(t.total_calories || 0);
+            const target = Math.round(data.calorie_target || 2100);
+
+            const calEl = document.getElementById("health-cal-consumed");
+            const targetEl = document.getElementById("health-cal-target");
+            const protEl = document.getElementById("health-protein");
+            const carbsEl = document.getElementById("health-carbs");
+            const fatsEl = document.getElementById("health-fats");
+            const waterEl = document.getElementById("health-water");
+            const remEl = document.getElementById("health-cal-remaining");
+            const progEl = document.getElementById("health-cal-progress");
+
+            if (calEl) calEl.textContent = consumed;
+            if (targetEl) targetEl.textContent = target;
+            if (protEl) protEl.textContent = Math.round(t.total_protein || 0) + "g";
+            if (carbsEl) carbsEl.textContent = Math.round(t.total_carbs || 0) + "g";
+            if (fatsEl) fatsEl.textContent = Math.round(t.total_fats || 0) + "g";
+            if (waterEl) waterEl.textContent = t.total_water || 0;
+
+            const remaining = Math.round(data.remaining || (target - consumed));
+            if (remEl) remEl.textContent = `${remaining} kcal remaining`;
+
+            const pct = Math.min(100, Math.round((consumed / target) * 100));
+            if (progEl) progEl.style.width = `${pct}%`;
+
+            // Render meal history log
+            const logDiv = document.getElementById("health-meal-log");
+            if (logDiv) {
+                if (!data.meals || data.meals.length === 0) {
+                    logDiv.innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No meals logged yet today. Tell the AI Coach what you ate!</p>';
+                } else {
+                    logDiv.innerHTML = data.meals.map(m => {
+                        const mealIcons = { breakfast: "🌅", lunch: "☀️", dinner: "🌙", snack: "🍿" };
+                        const icon = mealIcons[m.meal_type] || "🍽️";
+                        const timeStr = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+                        return `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.7rem 1rem; background: var(--bg-card-subtle); border-radius: 12px; border: 1px solid var(--border-color);">
+                                <div style="display: flex; align-items: center; gap: 0.7rem;">
+                                    <span style="font-size: 1.5rem;">${icon}</span>
+                                    <div>
+                                        <strong style="font-size: 0.92rem; text-transform: capitalize; color: var(--text-primary);">${m.meal_type}</strong>
+                                        <div style="font-size: 0.82rem; color: var(--text-secondary);">${m.food_description}</div>
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <strong style="color: var(--coral); font-size: 0.95rem;">${Math.round(m.estimated_calories)} kcal</strong>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">${timeStr}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join("");
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load health monitor", e);
+        }
+    }
+
+    async logHealthFood() {
+        const input = document.getElementById("health-food-input");
+        const text = input ? input.value.trim() : "";
+        if (!text) return;
+
+        input.value = "";
+        await window.chatbotWidget.sendMessage(text);
+        setTimeout(() => this.loadHealthMonitor(), 1200);
+    }
+
+    async logWater(glasses) {
+        await window.chatbotWidget.sendMessage(`I drank ${glasses} glass${glasses > 1 ? 'es' : ''} of water`);
+        setTimeout(() => this.loadHealthMonitor(), 1200);
+    }
+
+    startHealthCheckIn() {
+        window.chatbotWidget.toggle();
+        setTimeout(() => {
+            window.chatbotWidget.sendMessage("health check");
+        }, 400);
     }
 }
 

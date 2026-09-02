@@ -65,6 +65,15 @@ class ProfileUpdateRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
 
+class NutritionLogRequest(BaseModel):
+    meal_type: str = "snack"
+    food_description: str
+    estimated_calories: float = 0
+    protein_g: float = 0
+    carbs_g: float = 0
+    fats_g: float = 0
+    water_glasses: int = 0
+
 class ActivityLogRequest(BaseModel):
     steps: int
     distance_km: float
@@ -391,13 +400,63 @@ def chat_with_coach(req: ChatRequest, user: Optional[dict] = Depends(get_optiona
     cursor = conn.cursor()
 
     user_prof = None
+    daily_nutrition = None
+    today_str = date.today().isoformat()
+
     if user:
         cursor.execute("SELECT * FROM profiles WHERE user_id = ?", (user["user_id"],))
         profile = cursor.fetchone()
         if profile:
             user_prof = dict(profile)
 
-    reply = FitnessCoachChatbot.answer(req.message, user_prof)
+        # Get today's nutrition totals
+        try:
+            cursor.execute("""
+            SELECT COALESCE(SUM(estimated_calories), 0) as total_cal,
+                   COALESCE(SUM(protein_g), 0) as total_p,
+                   COALESCE(SUM(carbs_g), 0) as total_c,
+                   COALESCE(SUM(fats_g), 0) as total_f,
+                   COALESCE(SUM(water_glasses), 0) as water
+            FROM nutrition_logs WHERE user_id = ? AND date_str = ?
+            """, (user["user_id"], today_str))
+            row = cursor.fetchone()
+            if row:
+                daily_nutrition = dict(row)
+        except Exception:
+            pass
+
+    # Get chatbot response (returns dict with reply + food_data)
+    result = FitnessCoachChatbot.answer_with_data(req.message, user_prof, daily_nutrition)
+    reply = result["reply"]
+    food_data = result.get("food_data")
+
+    # If food was detected, auto-log it to nutrition_logs
+    if user and food_data:
+        now_str = datetime.now().isoformat()
+        hour = datetime.now().hour
+        if hour < 11:
+            meal_type = "breakfast"
+        elif hour < 15:
+            meal_type = "lunch"
+        elif hour < 18:
+            meal_type = "snack"
+        else:
+            meal_type = "dinner"
+
+        try:
+            cursor.execute("""
+            INSERT INTO nutrition_logs (user_id, date_str, meal_type, food_description,
+                estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user["user_id"], today_str, meal_type, req.message,
+                  food_data.get("total_calories", 0),
+                  food_data.get("total_protein", 0),
+                  food_data.get("total_carbs", 0),
+                  food_data.get("total_fats", 0),
+                  food_data.get("water_glasses", 0),
+                  now_str))
+        except Exception:
+            pass
 
     if user:
         now_str = datetime.now().isoformat()
@@ -405,10 +464,52 @@ def chat_with_coach(req: ChatRequest, user: Optional[dict] = Depends(get_optiona
         INSERT INTO chat_history (user_id, sender, message, timestamp)
         VALUES (?, 'user', ?, ?), (?, 'coach', ?, ?)
         """, (user["user_id"], req.message, now_str, user["user_id"], reply, now_str))
-        conn.commit()
 
+    conn.commit()
     conn.close()
     return {"reply": reply}
+
+@app.get("/api/nutrition/today")
+def get_today_nutrition(user: dict = Depends(get_current_user)):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    today_str = date.today().isoformat()
+
+    try:
+        cursor.execute("""
+        SELECT COALESCE(SUM(estimated_calories), 0) as total_calories,
+               COALESCE(SUM(protein_g), 0) as total_protein,
+               COALESCE(SUM(carbs_g), 0) as total_carbs,
+               COALESCE(SUM(fats_g), 0) as total_fats,
+               COALESCE(SUM(water_glasses), 0) as total_water
+        FROM nutrition_logs WHERE user_id = ? AND date_str = ?
+        """, (user["user_id"], today_str))
+        totals = dict(cursor.fetchone())
+    except Exception:
+        totals = {"total_calories": 0, "total_protein": 0, "total_carbs": 0, "total_fats": 0, "total_water": 0}
+
+    try:
+        cursor.execute("""
+        SELECT meal_type, food_description, estimated_calories, protein_g, carbs_g, fats_g, water_glasses, timestamp
+        FROM nutrition_logs WHERE user_id = ? AND date_str = ?
+        ORDER BY timestamp ASC
+        """, (user["user_id"], today_str))
+        meals = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        meals = []
+
+    cursor.execute("SELECT daily_calorie_target FROM profiles WHERE user_id = ?", (user["user_id"],))
+    profile = cursor.fetchone()
+    calorie_target = profile["daily_calorie_target"] if profile else 2100
+
+    conn.close()
+    return {
+        "totals": totals,
+        "meals": meals,
+        "calorie_target": calorie_target,
+        "remaining": max(0, calorie_target - totals["total_calories"])
+    }
+
 
 @app.get("/api/leaderboard/global")
 def get_global_leaderboard():

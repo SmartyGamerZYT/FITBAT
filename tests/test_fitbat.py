@@ -79,5 +79,20 @@ class TestFitbat(unittest.TestCase):
         reply_battle = FitnessCoachChatbot.answer("How do I win battles in the arena?")
         self.assertIn("Battle", reply_battle)
 
+    def test_food_calorie_estimation(self):
+        food_data = FitnessCoachChatbot.estimate_food_calories("I ate 2 eggs and 1 banana")
+        self.assertIsNotNone(food_data)
+        self.assertGreater(food_data["total_calories"], 200)
+        self.assertGreater(food_data["total_protein"], 10)
+
+        # Test water detection
+        water_data = FitnessCoachChatbot.estimate_food_calories("I drank 3 glasses of water")
+        self.assertIsNotNone(water_data)
+        self.assertEqual(water_data["water_glasses"], 3)
+
+        # Test health check response
+        health_check = FitnessCoachChatbot.answer("health check")
+        self.assertIn("Breakfast", health_check)
+
 if __name__ == "__main__":
     unittest.main()
