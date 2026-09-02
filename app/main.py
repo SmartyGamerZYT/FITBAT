@@ -15,7 +15,7 @@ from .chatbot import FitnessCoachChatbot
 from .exercises import get_all_exercises, get_exercise_by_id
 from .battle_manager import battle_manager
 
-app = FastAPI(title="FITBAT - Fitness Battles", version="1.3.0")
+app = FastAPI(title="FITBAT - Fitness Battles", version="1.4.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -234,7 +234,6 @@ def list_exercises():
 def get_exercise(exercise_id: str):
     return {"exercise": get_exercise_by_id(exercise_id)}
 
-# Works for both logged-in users AND guests (Never returns 401!)
 @app.get("/api/tasks/daily")
 def get_daily_tasks(user: Optional[dict] = Depends(get_optional_user)):
     conn = get_db_connection()
@@ -489,7 +488,7 @@ def get_battle_history(user: dict = Depends(get_current_user)):
     conn.close()
     return {"history": [dict(r) for r in rows]}
 
-# --- Real-time WebSocket Battle Arena ---
+# --- Real-time WebSocket Battle Arena (Always accepts connections with zero auth popups) ---
 @app.websocket("/ws/battle")
 async def websocket_battle_endpoint(websocket: WebSocket, token: Optional[str] = None, exercise_id: str = "pushups", 
                                     age_group: str = "Prime (20-29)", room_code: Optional[str] = None, 
@@ -497,13 +496,9 @@ async def websocket_battle_endpoint(websocket: WebSocket, token: Optional[str] =
     session = get_current_user_from_token(token) if token else None
     
     if not session:
-        await websocket.accept()
-        await websocket.send_json({
-            "type": "ERROR",
-            "message": "Authentication required for multiplayer battles. Please log in."
-        })
-        await websocket.close(code=1008)
-        return
+        guest_id = random.randint(50000, 99999)
+        guest_name = f"Warrior_{random.randint(100, 999)}"
+        session = {"user_id": guest_id, "username": guest_name}
 
     user_id = session["user_id"]
     username = session["username"]
@@ -536,8 +531,6 @@ async def websocket_battle_endpoint(websocket: WebSocket, token: Optional[str] =
                 break
 
     except WebSocketDisconnect:
-        print(f"[WS] Player {username} disconnected.")
         await battle_manager.finish_match(room_id, websocket)
-    except Exception as e:
-        print(f"[WS ERROR] Unexpected error for player {username}: {type(e).__name__}: {e}")
+    except Exception:
         await battle_manager.finish_match(room_id, websocket)

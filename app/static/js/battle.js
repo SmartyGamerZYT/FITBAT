@@ -20,6 +20,9 @@ class BattleArena {
     }
 
     async startBattle(exerciseId, ageGroup, forceAi = false, roomCode = null, isCreator = false) {
+        // Clean up any previous session before starting a fresh one
+        this.cleanupSession();
+
         this.currentExercise = exerciseId;
         this.currentAgeGroup = ageGroup;
         this.userReps = 0;
@@ -30,30 +33,44 @@ class BattleArena {
         this.roomCode = roomCode;
         this.isCreator = isCreator;
 
+        this.updatePlayerHUD();
+        this.updateOpponentHUD();
+
         if (window.soundEngine) window.soundEngine.playCountdown(true);
 
         const token = localStorage.getItem("fitbat_token") || "";
-
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         let wsUrl = `${protocol}//${window.location.host}/ws/battle?token=${encodeURIComponent(token)}&exercise_id=${exerciseId}&age_group=${encodeURIComponent(ageGroup)}&force_ai=${forceAi}`;
         if (roomCode) {
             wsUrl += `&room_code=${encodeURIComponent(roomCode)}`;
         }
 
-        this.ws = new WebSocket(wsUrl);
+        try {
+            this.ws = new WebSocket(wsUrl);
 
-        this.ws.onopen = () => {
-            console.log("Connected to Battle Arena WebSocket.");
-        };
+            this.ws.onopen = () => {
+                console.log("Connected to Battle Arena WebSocket.");
+            };
 
-        this.ws.onmessage = async (event) => {
-            const data = JSON.parse(event.data);
-            await this.handleServerMessage(data);
-        };
+            this.ws.onmessage = async (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    await this.handleServerMessage(data);
+                } catch (e) {
+                    console.error("Error parsing WebSocket message:", e);
+                }
+            };
 
-        this.ws.onclose = () => {
-            console.log("Battle WebSocket closed.");
-        };
+            this.ws.onerror = (err) => {
+                console.warn("WebSocket error:", err);
+            };
+
+            this.ws.onclose = () => {
+                console.log("Battle WebSocket closed.");
+            };
+        } catch (e) {
+            console.error("Failed to connect websocket:", e);
+        }
 
         // Initialize Local Pose Tracker with Camera
         const video = document.getElementById("battle-user-video");
@@ -67,12 +84,31 @@ class BattleArena {
             this.onPlayerFeedback.bind(this)
         );
 
-        // ONLY show the "Private Arena Created" popup if this user is the CREATOR
         if (isCreator && roomCode) {
             this.showWaitingForFriendModal(roomCode);
         } else if (roomCode) {
             this.showBattleOverlay(`Connecting to Arena ${roomCode}...`);
         }
+    }
+
+    cleanupSession() {
+        this.isBattleActive = false;
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+        }
+        if (this.ws) {
+            try { this.ws.close(); } catch (e) {}
+            this.ws = null;
+        }
+        if (this.peerConnection) {
+            try { this.peerConnection.close(); } catch (e) {}
+            this.peerConnection = null;
+        }
+        if (window.poseTracker) {
+            window.poseTracker.stop();
+        }
+        this.hideWaitingForFriendModal();
     }
 
     async handleServerMessage(data) {
@@ -81,8 +117,6 @@ class BattleArena {
         switch (data.type) {
             case "ERROR":
                 this.showBattleOverlay(data.message);
-                alert(data.message);
-                this.exitBattle();
                 break;
 
             case "ROOM_CREATED":
@@ -95,7 +129,6 @@ class BattleArena {
                 break;
 
             case "MATCH_START":
-                // 1. Instantly close any waiting popup on BOTH devices!
                 this.hideWaitingForFriendModal();
                 
                 this.isBattleActive = true;
@@ -109,7 +142,6 @@ class BattleArena {
                 this.showBattleOverlay("MATCH CONNECTED! 3... 2... 1... FIGHT!");
                 this.startTimer(data.duration || 45);
 
-                // If real human opponent, start WebRTC peer camera connection!
                 if (!data.opponent.is_ai) {
                     await this.initWebRTCPeerConnection();
                 } else {
@@ -164,7 +196,6 @@ class BattleArena {
         alert(`Arena ID ${code} copied to clipboard! Send this code to your friend.`);
     }
 
-    // --- WebRTC Real Camera Streaming with Friends ---
     async initWebRTCPeerConnection() {
         const config = {
             iceServers: [
@@ -197,7 +228,6 @@ class BattleArena {
 
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate && this.ws && this.ws.readyState === WebSocket.OPEN) {
-                console.log("[WEBRTC] ICE candidate sent");
                 this.ws.send(JSON.stringify({
                     type: "WEBRTC_ICE_CANDIDATE",
                     candidate: event.candidate
@@ -205,12 +235,7 @@ class BattleArena {
             }
         };
 
-        this.peerConnection.onconnectionstatechange = () => {
-            console.log("[WEBRTC] Connection state:", this.peerConnection.connectionState);
-        };
-
         if (this.isInitiator) {
-            console.log("[WEBRTC] Creating offer");
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
             this.ws.send(JSON.stringify({
@@ -221,7 +246,6 @@ class BattleArena {
     }
 
     async handleWebRTCOffer(offer) {
-        console.log("[WEBRTC] Received offer, creating answer");
         if (!this.peerConnection) await this.initWebRTCPeerConnection();
         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await this.peerConnection.createAnswer();
@@ -234,7 +258,6 @@ class BattleArena {
 
     async handleWebRTCAnswer(answer) {
         if (this.peerConnection) {
-            console.log("[WEBRTC] Received answer");
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         }
     }
@@ -242,10 +265,9 @@ class BattleArena {
     async handleWebRTCIceCandidate(candidate) {
         if (this.peerConnection) {
             try {
-                console.log("[WEBRTC] ICE candidate received");
                 await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
             } catch (e) {
-                console.warn("[WEBRTC ERROR] adding ICE candidate:", e);
+                console.warn("Error adding ICE candidate:", e);
             }
         }
     }
@@ -416,13 +438,7 @@ class BattleArena {
     }
 
     exitBattle() {
-        this.isBattleActive = false;
-        if (this.timerInterval) clearInterval(this.timerInterval);
-        if (this.ws) this.ws.close();
-        if (this.peerConnection) this.peerConnection.close();
-        window.poseTracker.stop();
-        this.hideWaitingForFriendModal();
-
+        this.cleanupSession();
         document.getElementById("battle-result-modal").classList.remove("open");
         if (window.app) window.app.showView("dashboard");
     }
