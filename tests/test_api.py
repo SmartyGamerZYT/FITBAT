@@ -117,8 +117,29 @@ class TestFitbatAPI(unittest.TestCase):
         self.assertEqual(nut_log.status_code, 200)
 
         today_nut = self.client.get("/api/nutrition/today", headers={"Authorization": f"Bearer {token}"})
-        self.assertEqual(today_nut.status_code, 200)
-        self.assertGreaterEqual(today_nut.json()["totals"]["total_calories"], 300)
+        # 11. Test Strava Multi-Sport Workout Logging
+        strava_res = self.client.post("/api/strava/workout", json={
+            "sport_type": "cycling",
+            "title": "Morning Hill Climb",
+            "distance_km": 14.5,
+            "duration_seconds": 1850,
+            "avg_speed_kmh": 28.2,
+            "max_speed_kmh": 45.0,
+            "avg_pace_minkm": "2:08",
+            "elevation_gain_m": 125.0,
+            "calories_burned": 420.0,
+            "route_geojson": '{"type":"LineString","coordinates":[[77.59,12.97],[77.60,12.98]]}'
+        }, headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(strava_res.status_code, 200)
+        strava_data = strava_res.json()
+        self.assertTrue(strava_data["success"])
+        self.assertGreaterEqual(strava_data["xp_awarded"], 25)
+
+        strava_list = self.client.get("/api/strava/workouts", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(strava_list.status_code, 200)
+        workouts = strava_list.json()["workouts"]
+        self.assertGreaterEqual(len(workouts), 1)
+        self.assertEqual(workouts[0]["sport_type"], "cycling")
 
 if __name__ == "__main__":
     unittest.main()

@@ -86,6 +86,19 @@ class TaskCompleteRequest(BaseModel):
     task_id: int
     progress: float
 
+class StravaWorkoutRequest(BaseModel):
+    sport_type: str = "cycling"  # cycling, running, walking, hiking
+    title: str = "Workout Activity"
+    distance_km: float = 0.0
+    duration_seconds: int = 0
+    avg_speed_kmh: float = 0.0
+    max_speed_kmh: float = 0.0
+    avg_pace_minkm: str = "0:00"
+    elevation_gain_m: float = 0.0
+    calories_burned: float = 0.0
+    route_geojson: Optional[str] = None
+    created_at: Optional[str] = None
+
 def get_optional_user(authorization: Optional[str] = Header(None)) -> Optional[dict]:
     if not authorization or not authorization.startswith("Bearer "):
         return None
@@ -428,6 +441,83 @@ def get_today_activity(user: Optional[dict] = Depends(get_optional_user)):
         "calories_burned": 0.0,
         "active_minutes": 0
     }
+
+@app.post("/api/strava/workout")
+def save_strava_workout(req: StravaWorkoutRequest, user: Optional[dict] = Depends(get_optional_user)):
+    effective_user = user or get_or_create_guest_user()
+    user_id = effective_user["user_id"]
+    now_str = req.created_at or datetime.now(timezone.utc).isoformat()
+    today_str = date.today().isoformat()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT INTO strava_workouts (
+        user_id, sport_type, title, distance_km, duration_seconds,
+        avg_speed_kmh, max_speed_kmh, avg_pace_minkm, elevation_gain_m,
+        calories_burned, route_geojson, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        user_id, req.sport_type, req.title, req.distance_km, req.duration_seconds,
+        req.avg_speed_kmh, req.max_speed_kmh, req.avg_pace_minkm, req.elevation_gain_m,
+        req.calories_burned, req.route_geojson, now_str
+    ))
+    workout_id = cursor.lastrowid
+
+    # Award XP and coins for workout effort (minimum 25 XP, +15 XP/km)
+    xp_awarded = max(25, int(req.distance_km * 15))
+    coins_awarded = max(10, int(req.distance_km * 8))
+
+    cursor.execute("""
+    UPDATE users SET xp = xp + ?, points = points + ?, coins = coins + ? WHERE id = ?
+    """, (xp_awarded, xp_awarded, coins_awarded, user_id))
+
+    # Also update daily activity_logs so steps/distance/calories tally
+    est_steps = int(req.distance_km * 1350) if req.sport_type in ["running", "walking", "hiking"] else int(req.distance_km * 300)
+    act_min = max(1, req.duration_seconds // 60)
+    cursor.execute("""
+    INSERT INTO activity_logs (user_id, date_str, steps, distance_km, calories_burned, active_minutes)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, date_str) DO UPDATE SET
+        steps = steps + excluded.steps,
+        distance_km = distance_km + excluded.distance_km,
+        calories_burned = calories_burned + excluded.calories_burned,
+        active_minutes = active_minutes + excluded.active_minutes
+    """, (user_id, today_str, est_steps, req.distance_km, req.calories_burned, act_min))
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "success": True,
+        "workout_id": workout_id,
+        "xp_awarded": xp_awarded,
+        "coins_awarded": coins_awarded,
+        "message": f"Awesome {req.sport_type.capitalize()} workout recorded! +{xp_awarded} XP earned."
+    }
+
+@app.get("/api/strava/workouts")
+def get_strava_workouts(user: Optional[dict] = Depends(get_optional_user)):
+    effective_user = user or get_or_create_guest_user()
+    user_id = effective_user["user_id"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT id, sport_type, title, distance_km, duration_seconds,
+           avg_speed_kmh, max_speed_kmh, avg_pace_minkm, elevation_gain_m,
+           calories_burned, route_geojson, created_at
+    FROM strava_workouts
+    WHERE user_id = ?
+    ORDER BY id DESC
+    LIMIT 30
+    """, (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    workouts = [dict(r) for r in rows]
+    return {"workouts": workouts}
 
 @app.post("/api/chatbot/message")
 def chat_with_coach(req: ChatRequest, user: Optional[dict] = Depends(get_optional_user)):

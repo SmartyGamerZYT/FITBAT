@@ -37,6 +37,10 @@ class FitbatApp {
             this.showAuthModal("login");
         }
 
+        if (window.gymMusicPlayer) {
+            window.gymMusicPlayer.init();
+        }
+
         this.setupEventListeners();
     }
 
@@ -74,6 +78,14 @@ class FitbatApp {
             this.loadLeaderboards();
         } else if (viewName === "activity") {
             this.loadTodayActivity();
+            if (window.stravaTracker) {
+                setTimeout(() => {
+                    window.stravaTracker.initMap();
+                    window.stravaTracker.loadSavedWorkouts();
+                }, 100);
+            }
+        } else if (viewName === "music") {
+            if (window.gymMusicPlayer) window.gymMusicPlayer.init();
         } else if (viewName === "health") {
             this.loadHealthMonitor();
         } else if (viewName === "battle_select") {

@@ -1,31 +1,31 @@
 :root {
-    --bg-light: #f4f7fb;
-    --bg-card: rgba(255, 255, 255, 0.95);
-    --bg-card-subtle: #f8fafc;
-    --border-color: #e2e8f0;
-    --border-highlight: #3b82f6;
+    --bg-light: #090a10;
+    --bg-card: rgba(18, 20, 30, 0.88);
+    --bg-card-subtle: #121520;
+    --border-color: rgba(239, 68, 68, 0.22);
+    --border-highlight: #ef4444;
     
-    /* Vibrant energetic light palette */
-    --blue: #2563eb;
-    --blue-light: #eff6ff;
-    --coral: #f43f5e;
-    --coral-light: #fff1f2;
+    /* Hardcore Gym Red & Black Palette */
+    --blue: #ef4444; /* Primary Gym Crimson */
+    --blue-light: rgba(239, 68, 68, 0.15);
+    --coral: #ff2a4b;
+    --coral-light: rgba(255, 42, 75, 0.15);
     --emerald: #10b981;
-    --emerald-light: #ecfdf5;
+    --emerald-light: rgba(16, 185, 129, 0.15);
     --amber: #f59e0b;
-    --amber-light: #fffbeb;
-    --purple: #8b5cf6;
-    --purple-light: #f5f3ff;
+    --amber-light: rgba(245, 158, 11, 0.15);
+    --purple: #dc2626;
+    --purple-light: rgba(220, 38, 38, 0.18);
     
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
     --text-muted: #94a3b8;
     
     --font-heading: 'Poppins', 'Nunito', sans-serif;
     --font-body: 'Nunito', 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
-    --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
-    --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.12);
+    --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 8px 25px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 16px 45px rgba(239, 68, 68, 0.18);
 }
 
 * {
@@ -41,8 +41,8 @@ body {
     min-height: 100vh;
     overflow-x: hidden;
     background-image: 
-        radial-gradient(circle at 10% 10%, rgba(37, 99, 235, 0.05) 0%, transparent 40%),
-        radial-gradient(circle at 90% 90%, rgba(244, 63, 94, 0.05) 0%, transparent 40%);
+        radial-gradient(circle at 10% 10%, rgba(239, 68, 68, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 90% 90%, rgba(185, 28, 28, 0.08) 0%, transparent 45%);
 }
 
 /* Header & Nav */
@@ -51,13 +51,13 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 0.8rem 1.5rem;
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(13, 15, 23, 0.95);
     border-bottom: 1px solid var(--border-color);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(16px);
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
     flex-wrap: wrap;
     gap: 0.8rem;
 }
@@ -182,33 +182,36 @@ body {
     padding: 1.5rem;
     box-shadow: var(--shadow-sm);
     transition: all 0.2s ease;
+    backdrop-filter: blur(12px);
 }
 .glass-card:hover {
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 8px 30px rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
 }
 
 .hero-metric-card {
-    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
-    border: 2px solid #bbf7d0;
+    background: linear-gradient(135deg, rgba(26, 29, 43, 0.95) 0%, rgba(25, 12, 18, 0.95) 100%);
+    border: 2px solid rgba(239, 68, 68, 0.35);
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1.5rem;
     gap: 1.5rem;
     flex-wrap: wrap;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
 }
 
 .fitness-score-circle {
     width: 130px;
     height: 130px;
     border-radius: 50%;
-    background: #ffffff;
-    border: 5px solid var(--emerald);
+    background: #0f121d;
+    border: 5px solid var(--blue);
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.2);
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.35);
     flex-shrink: 0;
 }
 
@@ -216,8 +219,9 @@ body {
     font-size: 2.4rem;
     font-family: var(--font-heading);
     font-weight: 900;
-    color: var(--emerald);
+    color: var(--blue);
     line-height: 1;
+    text-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
 }
 
 .dashboard-grid {
@@ -250,28 +254,30 @@ body {
 
 /* Buttons */
 .btn-primary {
-    background: linear-gradient(135deg, var(--blue), #1d4ed8);
+    background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
     color: #fff;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     padding: 0.75rem 1.4rem;
     border-radius: 12px;
     font-weight: 800;
     font-family: var(--font-heading);
     font-size: 0.95rem;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    box-shadow: 0 4px 18px rgba(239, 68, 68, 0.35);
     transition: all 0.2s ease;
     text-align: center;
+    letter-spacing: 0.3px;
 }
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35);
+    box-shadow: 0 6px 24px rgba(239, 68, 68, 0.55);
+    filter: brightness(1.1);
 }
 
 .btn-secondary {
-    background: #fff;
+    background: rgba(24, 28, 42, 0.9);
     color: var(--text-primary);
-    border: 1px solid var(--border-color);
+    border: 1px solid rgba(239, 68, 68, 0.25);
     padding: 0.75rem 1.4rem;
     border-radius: 12px;
     font-weight: 700;
@@ -282,16 +288,17 @@ body {
     text-align: center;
 }
 .btn-secondary:hover {
-    background: var(--bg-card-subtle);
-    border-color: var(--text-muted);
+    background: rgba(36, 42, 64, 0.95);
+    border-color: var(--blue);
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.2);
 }
 
 .btn-battle {
-    background: linear-gradient(135deg, var(--coral), #e11d48);
-    box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3);
+    background: linear-gradient(135deg, #ff2a4b, #991b1b);
+    box-shadow: 0 4px 18px rgba(255, 42, 75, 0.4);
 }
 .btn-battle:hover {
-    box-shadow: 0 6px 18px rgba(244, 63, 94, 0.4);
+    box-shadow: 0 6px 24px rgba(255, 42, 75, 0.6);
 }
 
 /* Age Selector Bar */
@@ -315,10 +322,11 @@ body {
     white-space: nowrap;
 }
 .age-pill.active {
-    background: var(--purple-light);
-    border-color: var(--purple);
-    color: var(--purple);
+    background: rgba(239, 68, 68, 0.2);
+    border-color: var(--blue);
+    color: #fca5a5;
     font-weight: 800;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
 }
 
 /* Exercise Cards Grid */
@@ -330,7 +338,7 @@ body {
 }
 
 .exercise-card {
-    background: #fff;
+    background: var(--bg-card);
     border: 2px solid var(--border-color);
     border-radius: 16px;
     padding: 1.1rem;
@@ -339,15 +347,17 @@ body {
     display: flex;
     gap: 0.8rem;
     align-items: center;
+    backdrop-filter: blur(8px);
 }
 .exercise-card:hover {
     border-color: var(--blue);
     transform: translateY(-2px);
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.25);
 }
 .exercise-card.selected {
     border-color: var(--blue);
-    background: var(--blue-light);
+    background: rgba(239, 68, 68, 0.15);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.3);
 }
 
 .ex-icon {
@@ -364,12 +374,13 @@ body {
 
 .ex-category-badge {
     font-size: 0.72rem;
-    background: #f1f5f9;
-    color: var(--text-secondary);
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
     padding: 2px 7px;
     border-radius: 8px;
     font-weight: 700;
     text-transform: uppercase;
+    border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .ex-desc {
@@ -381,11 +392,11 @@ body {
 
 /* Battle Arena View */
 .battle-arena-wrapper {
-    background: #fff;
-    border: 1px solid var(--border-color);
+    background: rgba(15, 17, 26, 0.96);
+    border: 1px solid rgba(239, 68, 68, 0.3);
     border-radius: 24px;
     padding: 1.2rem;
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 0 45px rgba(0, 0, 0, 0.9), 0 0 20px rgba(239, 68, 68, 0.15);
 }
 
 .battle-top-bar {
@@ -632,7 +643,7 @@ body {
 }
 
 .task-card {
-    background: #fff;
+    background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 18px;
     padding: 1.3rem;
@@ -643,15 +654,16 @@ body {
     box-shadow: var(--shadow-sm);
     transition: all 0.2s;
     cursor: pointer;
+    backdrop-filter: blur(8px);
 }
 .task-card:hover {
     border-color: var(--blue);
     transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.2);
 }
 .task-card.completed {
-    background: #f0fdf4;
-    border-color: #bbf7d0;
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.4);
 }
 
 .task-header {
@@ -664,14 +676,15 @@ body {
     font-size: 0.75rem;
     padding: 3px 8px;
     border-radius: 6px;
-    background: var(--bg-card-subtle);
+    background: rgba(239, 68, 68, 0.15);
     font-weight: 800;
-    color: var(--text-secondary);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .task-progress-bar-wrap {
     height: 8px;
-    background: #e2e8f0;
+    background: rgba(255, 255, 255, 0.1);
     border-radius: 10px;
     overflow: hidden;
 }
@@ -684,18 +697,20 @@ body {
 }
 
 .btn-task-action {
-    background: var(--blue-light);
-    color: var(--blue);
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
     border: 1px solid var(--blue);
     padding: 0.45rem 1rem;
     border-radius: 10px;
     font-weight: 800;
     font-size: 0.85rem;
     cursor: pointer;
+    transition: all 0.2s;
 }
 .btn-task-action:hover {
     background: var(--blue);
     color: #fff;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
 }
 
 .task-claimed-badge {
@@ -714,7 +729,7 @@ body {
 .leaderboard-table th, .leaderboard-table td {
     padding: 0.85rem 1rem;
     text-align: left;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .leaderboard-table th {
@@ -722,15 +737,17 @@ body {
     text-transform: uppercase;
     color: var(--text-muted);
     font-weight: 800;
+    border-bottom: 2px solid rgba(239, 68, 68, 0.3);
 }
 
 .leaderboard-table tr:hover {
-    background: var(--bg-card-subtle);
+    background: rgba(239, 68, 68, 0.08);
 }
 
 .highlight-me {
-    background: var(--blue-light) !important;
+    background: rgba(239, 68, 68, 0.18) !important;
     font-weight: 800;
+    border-left: 4px solid var(--blue);
 }
 
 .score-badge {
@@ -749,11 +766,11 @@ body {
     width: 58px;
     height: 58px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--blue), var(--purple));
+    background: linear-gradient(135deg, #ef4444, #991b1b);
     color: #fff;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.25);
     font-size: 1.6rem;
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 4px 20px rgba(239, 68, 68, 0.5);
     cursor: pointer;
     z-index: 99;
     display: flex;
@@ -763,6 +780,7 @@ body {
 }
 .chatbot-toggle-btn:hover {
     transform: scale(1.08);
+    box-shadow: 0 6px 25px rgba(239, 68, 68, 0.7);
 }
 
 .chatbot-drawer {
@@ -771,10 +789,10 @@ body {
     right: 24px;
     width: 380px;
     height: 500px;
-    background: #fff;
+    background: #0d0f17;
     border-radius: 20px;
-    box-shadow: var(--shadow-lg);
-    border: 1px solid var(--border-color);
+    box-shadow: 0 16px 50px rgba(0, 0, 0, 0.9), 0 0 20px rgba(239, 68, 68, 0.25);
+    border: 1px solid rgba(239, 68, 68, 0.35);
     display: none;
     flex-direction: column;
     z-index: 100;
@@ -792,7 +810,7 @@ body {
 }
 
 .chat-header {
-    background: linear-gradient(135deg, var(--blue), var(--purple));
+    background: linear-gradient(135deg, #ef4444, #991b1b);
     color: #fff;
     padding: 0.8rem 1rem;
     display: flex;
@@ -807,7 +825,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-    background: var(--bg-card-subtle);
+    background: #090a10;
 }
 
 .chat-msg {
@@ -820,16 +838,16 @@ body {
 
 .msg-user {
     align-self: flex-end;
-    background: var(--blue);
+    background: linear-gradient(135deg, #ef4444, #dc2626);
     color: #fff;
     border-bottom-right-radius: 2px;
 }
 
 .msg-coach {
     align-self: flex-start;
-    background: #fff;
+    background: #141724;
     color: var(--text-primary);
-    border: 1px solid var(--border-color);
+    border: 1px solid rgba(239, 68, 68, 0.25);
     border-bottom-left-radius: 2px;
 }
 
@@ -837,17 +855,19 @@ body {
     padding: 0.6rem;
     display: flex;
     gap: 0.4rem;
-    background: #fff;
-    border-top: 1px solid var(--border-color);
+    background: #0f121d;
+    border-top: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .chat-input-area input {
     flex: 1;
-    border: 1px solid var(--border-color);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    background: #181c2b;
     border-radius: 10px;
     padding: 0.6rem 0.8rem;
     font-size: 0.9rem;
     outline: none;
+    color: #fff;
     font-family: var(--font-body);
 }
 
@@ -855,8 +875,8 @@ body {
 .modal-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(15, 23, 42, 0.6);
-    backdrop-filter: blur(6px);
+    background: rgba(8, 9, 13, 0.85);
+    backdrop-filter: blur(8px);
     display: none;
     align-items: center;
     justify-content: center;
@@ -867,25 +887,29 @@ body {
 .modal-overlay.open { display: flex; }
 
 .modal-box {
-    background: #fff;
+    background: #0d0f17;
+    border: 1px solid rgba(239, 68, 68, 0.35);
     border-radius: 24px;
     padding: 2rem;
     width: 100%;
     max-width: 480px;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.95), 0 0 30px rgba(239, 68, 68, 0.2);
+    color: #f8fafc;
 }
 
 .quest-modal-box {
-    background: #fff;
+    background: #0d0f17;
+    border: 1px solid rgba(239, 68, 68, 0.35);
     border-radius: 24px;
     padding: 1.5rem;
     width: 100%;
     max-width: 580px;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.95), 0 0 30px rgba(239, 68, 68, 0.2);
+    color: #f8fafc;
 }
 
 .quest-camera-viewport {
@@ -894,8 +918,9 @@ body {
     border-radius: 16px;
     overflow: hidden;
     position: relative;
-    background: #0f172a;
+    background: #090a10;
     margin: 1rem 0;
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .quest-camera-viewport video, .quest-camera-viewport canvas {
@@ -903,7 +928,7 @@ body {
     top: 0; left: 0;
     width: 100%; height: 100%;
     object-fit: cover;
-    transform: scaleX(-1); /* Mirrors quest camera & canvas skeleton in 100% hardware sync */
+    transform: scaleX(-1);
 }
 
 .auth-tabs {
@@ -928,6 +953,7 @@ body {
     background: var(--blue);
     color: #fff;
     border-color: var(--blue);
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
 }
 
 .form-group {
@@ -944,14 +970,18 @@ body {
 }
 
 .form-group input, .form-group select {
-    background: #fff;
-    border: 1px solid var(--border-color);
+    background: #151824;
+    border: 1px solid rgba(239, 68, 68, 0.25);
     border-radius: 10px;
     padding: 0.7rem;
-    color: var(--text-primary);
+    color: #f8fafc;
     font-size: 0.95rem;
     outline: none;
     font-family: var(--font-body);
+}
+.form-group input:focus, .form-group select:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
 }
 
 .form-error {
@@ -1344,4 +1374,341 @@ body {
     0% { transform: scale(0.6); opacity: 0.9; }
     100% { transform: scale(1.4); opacity: 0; }
 }
+
+/* ===================================================
+   STRAVA-LIKE MULTI-SPORT GPS TRACKER STYLES
+=================================================== */
+
+.sport-selector-bar {
+    display: flex;
+    gap: 0.8rem;
+    overflow-x: auto;
+    margin-bottom: 1.5rem;
+    padding: 0.3rem 0;
+}
+
+.sport-tab-btn {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    padding: 0.8rem 1.4rem;
+    border-radius: 14px;
+    color: var(--text-secondary);
+    font-weight: 800;
+    font-family: var(--font-heading);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+}
+
+.sport-tab-btn:hover {
+    border-color: var(--blue);
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+.sport-tab-btn.active {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(185, 28, 28, 0.35));
+    border-color: var(--blue);
+    color: #fff;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.35);
+}
+
+.strava-hud-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.strava-stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.2rem;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    position: relative;
+    overflow: hidden;
+}
+
+.strava-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--blue);
+}
+
+.strava-big-val {
+    font-family: var(--font-heading);
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1.1;
+    margin: 0.3rem 0;
+}
+
+.strava-unit {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.strava-map-container {
+    width: 100%;
+    height: 380px;
+    border-radius: 20px;
+    overflow: hidden;
+    border: 2px solid rgba(239, 68, 68, 0.35);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(239, 68, 68, 0.15);
+    position: relative;
+    margin-bottom: 1.5rem;
+    background: #090a10;
+}
+
+.strava-map-overlay-badge {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 1000;
+    background: rgba(13, 15, 23, 0.92);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    padding: 0.4rem 0.9rem;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #fca5a5;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.splits-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    margin-top: 0.5rem;
+}
+
+.splits-table th, .splits-table td {
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.splits-table th {
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 800;
+}
+
+.kom-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #000;
+    font-size: 0.72rem;
+    font-weight: 900;
+    padding: 2px 7px;
+    border-radius: 6px;
+    text-transform: uppercase;
+}
+
+.strava-workout-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.8rem;
+    transition: all 0.2s ease;
+}
+
+.strava-workout-card:hover {
+    border-color: var(--blue);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.2);
+}
+
+/* ===================================================
+   GYM BEATS WORKOUT MUSIC PLAYER STYLES
+=================================================== */
+
+.music-grid-stations {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+}
+
+.station-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    border-radius: 18px;
+    padding: 1.4rem;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.8rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.station-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--blue);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.station-card:hover {
+    border-color: var(--blue);
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(239, 68, 68, 0.25);
+}
+
+.station-card.active {
+    border-color: var(--blue);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(185, 28, 28, 0.25));
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.35);
+}
+
+.station-card.active::after {
+    opacity: 1;
+}
+
+.station-bpm-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.music-deck-card {
+    background: linear-gradient(135deg, rgba(22, 25, 37, 0.95), rgba(15, 17, 26, 0.98));
+    border: 2px solid rgba(239, 68, 68, 0.4);
+    border-radius: 22px;
+    padding: 1.8rem;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.9), 0 0 25px rgba(239, 68, 68, 0.2);
+    margin-bottom: 2rem;
+}
+
+.audio-visualizer-canvas {
+    width: 100%;
+    height: 80px;
+    border-radius: 12px;
+    background: rgba(8, 9, 13, 0.7);
+    margin: 1.2rem 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.music-control-btn {
+    background: rgba(30, 35, 52, 0.9);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fff;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.music-control-btn:hover {
+    background: var(--blue);
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+}
+
+.music-control-btn.play-main {
+    width: 64px;
+    height: 64px;
+    font-size: 1.6rem;
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.5);
+}
+
+.track-scrubber-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.track-scrubber-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ef4444, #ff2a4b);
+    width: 0%;
+    transition: width 0.1s linear;
+}
+
+/* Persistent Bottom Mini-Player Dock across all views */
+.persistent-music-mini-player {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 68px;
+    background: rgba(12, 14, 21, 0.96);
+    border-top: 2px solid rgba(239, 68, 68, 0.4);
+    backdrop-filter: blur(18px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(239, 68, 68, 0.15);
+}
+
+.mini-equalizer-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 24px;
+}
+
+.mini-eq-bar {
+    width: 4px;
+    background: #ef4444;
+    border-radius: 2px;
+    animation: miniEqJump 0.8s infinite alternate ease-in-out;
+}
+
+.mini-eq-bar:nth-child(1) { height: 8px; animation-delay: 0.1s; }
+.mini-eq-bar:nth-child(2) { height: 18px; animation-delay: 0.3s; }
+.mini-eq-bar:nth-child(3) { height: 24px; animation-delay: 0.15s; }
+.mini-eq-bar:nth-child(4) { height: 12px; animation-delay: 0.4s; }
+
+@keyframes miniEqJump {
+    0% { height: 4px; opacity: 0.4; }
+    100% { height: 24px; opacity: 1; }
+}
+
 

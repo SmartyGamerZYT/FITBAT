@@ -11,7 +11,10 @@
     <!-- MediaPipe Pose & Camera Utilities -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-    <!-- Light & Casual Style -->
+    <!-- Leaflet.js Interactive GPS Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <!-- Hardcore Dark Gym Vibe Style -->
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -31,7 +34,8 @@
             <button class="nav-link active" data-nav="dashboard" id="nav-dashboard">📊 Dashboard</button>
             <button class="nav-link" data-nav="battle_select" id="nav-battle_select">⚔️ Battle Ground</button>
             <button class="nav-link" data-nav="tasks" id="nav-tasks">🎯 Daily Quests</button>
-            <button class="nav-link" data-nav="activity" id="nav-activity">👟 Step Monitor</button>
+            <button class="nav-link" data-nav="activity" id="nav-activity">⚡ Tracker</button>
+            <button class="nav-link" data-nav="music" id="nav-music">🎵 Gym Beats</button>
             <button class="nav-link" data-nav="leaderboard" id="nav-leaderboard">🏆 Leaderboards</button>
             <button class="nav-link" data-nav="health" id="nav-health">🩺 Health Monitor</button>
         </nav>
@@ -298,71 +302,209 @@
             <div class="tasks-grid" id="daily-tasks-list"></div>
         </section>
 
-        <!-- VIEW 5: STEP & ACTIVITY MONITOR -->
+        <!-- VIEW 5: MULTI-SPORT GPS TRACKER -->
         <section id="view-activity" class="app-view">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
                 <div>
-                    <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">👟 Real-Time Step & Activity Monitor</h1>
-                    <p style="color: var(--text-secondary);">Real-time accelerometer pedometer tracks your live walking and saves every step to the database.</p>
+                    <h1 style="font-family: var(--font-heading); font-size: 2rem; color: #fff;">⚡ Tracker</h1>
+                    <p style="color: var(--text-secondary);">Real-time cycling distance, running pace, GPS route mapping, elevation, splits & step pedometer.</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 0.6rem;">
-                    <span id="pedometer-badge" class="ex-category-badge" style="background: #f1f5f9; color: var(--text-secondary);">⚪ Sensor Standby</span>
+                    <span id="strava-status-badge" class="ex-category-badge" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5;">⚪ Tracker Ready</span>
                 </div>
             </div>
 
-            <div class="dashboard-grid">
-                <!-- Main Real-Time Pedometer Dial Card -->
-                <div class="glass-card" style="text-align: center; padding: 2.2rem 1.5rem; position: relative;">
-                    <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 0.8rem;">
-                        <div id="step-pulse-circle" style="width: 170px; height: 170px; border-radius: 50%; border: 6px solid var(--blue); display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 0 auto; box-shadow: 0 0 25px rgba(37,99,235,0.2); transition: transform 0.15s ease;">
-                            <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 800;">LIVE STEPS</span>
-                            <div style="font-size: 3rem; font-family: var(--font-heading); font-weight: 900; color: var(--blue); line-height: 1.1;" id="act-steps-count">0</div>
-                            <span id="act-cadence" style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 700;">0 steps/min</span>
-                        </div>
-                    </div>
+            <!-- Sport Selector Bar -->
+            <div class="sport-selector-bar">
+                <button class="sport-tab-btn active" data-sport="cycling" onclick="window.stravaTracker.setSport('cycling')">
+                    🚴 Cycling
+                </button>
+                <button class="sport-tab-btn" data-sport="running" onclick="window.stravaTracker.setSport('running')">
+                    🏃 Running
+                </button>
+                <button class="sport-tab-btn" data-sport="walking" onclick="window.stravaTracker.setSport('walking')">
+                    🚶 Walking
+                </button>
+                <button class="sport-tab-btn" data-sport="hiking" onclick="window.stravaTracker.setSport('hiking')">
+                    ⛰️ Hiking / Trail
+                </button>
+            </div>
 
-                    <div class="power-bar-wrap" style="height: 12px; margin: 1.2rem auto; max-width: 320px; background: #e2e8f0;">
-                        <div class="power-bar-fill" id="step-progress-bar" style="width: 0%; background: linear-gradient(90deg, var(--blue), var(--emerald));"></div>
-                    </div>
-                    <div id="act-step-pct" style="color: var(--text-secondary); font-size: 0.92rem; font-weight: 700;">0% of 8,000 daily goal</div>
+            <!-- Live Strava HUD Metrics -->
+            <div class="strava-hud-grid">
+                <div class="strava-stat-card">
+                    <span class="strava-unit">Total Distance</span>
+                    <div class="strava-big-val" id="strava-distance" style="color: #10b981;">0.00</div>
+                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">KILOMETERS</span>
+                </div>
+                <div class="strava-stat-card">
+                    <span class="strava-unit" id="strava-speed-label">Live Speed</span>
+                    <div class="strava-big-val" id="strava-speed-pace" style="color: var(--blue);">0.0</div>
+                    <span id="strava-speed-unit" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">KM/H</span>
+                </div>
+                <div class="strava-stat-card">
+                    <span class="strava-unit">Elapsed Time</span>
+                    <div class="strava-big-val" id="strava-timer" style="color: #f59e0b;">00:00:00</div>
+                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">ACTIVE TIMER</span>
+                </div>
+                <div class="strava-stat-card">
+                    <span class="strava-unit">Active Calories</span>
+                    <div class="strava-big-val" id="strava-calories" style="color: #ff2a4b;">0</div>
+                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">KCAL BURNED</span>
+                </div>
+                <div class="strava-stat-card">
+                    <span class="strava-unit">Elevation Gain</span>
+                    <div class="strava-big-val" id="strava-elevation" style="color: #38bdf8;">0</div>
+                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">METERS ASCENT</span>
+                </div>
+                <div class="strava-stat-card" id="strava-steps-box">
+                    <span class="strava-unit">Steps / Cadence</span>
+                    <div class="strava-big-val" id="strava-steps" style="color: #a855f7;">0</div>
+                    <span id="strava-cadence" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">0 steps/min</span>
+                </div>
+            </div>
 
-                    <!-- Live Control Buttons -->
-                    <div style="display: flex; justify-content: center; gap: 0.6rem; margin-top: 1.5rem; flex-wrap: wrap;">
-                        <button id="btn-toggle-pedometer" class="btn-primary" style="padding: 0.65rem 1.4rem; font-size: 0.92rem;" onclick="window.app.toggleRealtimePedometer()">
-                            ▶️ Start Real-Time Sensor
+            <!-- Real-Time Interactive GPS Route Map -->
+            <div class="strava-map-container" id="strava-map-wrap">
+                <div class="strava-map-overlay-badge" id="strava-gps-badge">
+                    <span>🛰️ GPS Live Breadcrumbs</span>
+                    <span id="strava-gps-coords" style="font-size: 0.72rem; color: #94a3b8; margin-left: 6px;">37.7749, -122.4194</span>
+                </div>
+                <div id="strava-map" style="width: 100%; height: 100%;"></div>
+            </div>
+
+            <!-- Workout Action Controls -->
+            <div class="glass-card" style="margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div style="display: flex; gap: 0.8rem; flex-wrap: wrap;">
+                        <button id="btn-strava-start" class="btn-primary" style="padding: 0.75rem 1.8rem; font-size: 1rem;" onclick="window.stravaTracker.start()">
+                            ▶️ Start Workout
+                        </button>
+                        <button id="btn-strava-pause" class="btn-secondary" style="padding: 0.75rem 1.4rem; font-size: 1rem; display: none;" onclick="window.stravaTracker.pause()">
+                            ⏸️ Pause
+                        </button>
+                        <button id="btn-strava-finish" class="btn-secondary" style="padding: 0.75rem 1.4rem; font-size: 1rem; display: none; color: #10b981; border-color: #10b981;" onclick="window.stravaTracker.finish()">
+                            ⏹️ Finish & Save Activity
                         </button>
                     </div>
 
-                    <!-- Quick manual simulation buttons for testing on laptops -->
-                    <div style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.4rem; flex-wrap: wrap;">
-                        <button class="ex-category-badge" style="cursor: pointer; padding: 0.35rem 0.7rem;" onclick="window.app.simulateWalking(100)">+100 Steps</button>
-                        <button class="ex-category-badge" style="cursor: pointer; padding: 0.35rem 0.7rem;" onclick="window.app.simulateWalking(500)">+500 Steps Walk</button>
-                        <button class="ex-category-badge" style="cursor: pointer; padding: 0.35rem 0.7rem;" onclick="window.app.simulateWalking(1000)">+1,000 Steps</button>
-                    </div>
-                    <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 0.8rem;">
-                        💾 Auto-syncs live to database • Phone accelerometer & laptop supported
-                    </div>
-                </div>
-
-                <!-- Live Metrics Card -->
-                <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-around; gap: 1.2rem;">
-                    <div class="metric-stat-item">
-                        <span class="stat-label">Total Distance</span>
-                        <span class="stat-value" id="act-distance" style="color: var(--emerald); font-size: 1.8rem;">0.00 km</span>
-                    </div>
-                    <div class="metric-stat-item">
-                        <span class="stat-label">Active Calories Burned</span>
-                        <span class="stat-value" id="act-calories" style="color: var(--amber); font-size: 1.8rem;">0 kcal</span>
-                    </div>
-                    <div class="metric-stat-item">
-                        <span class="stat-label">Active Walking Time</span>
-                        <span class="stat-value" id="act-active-min" style="color: var(--coral); font-size: 1.8rem;">0 min</span>
-                    </div>
-                    <div style="padding: 0.8rem; background: var(--bg-card-subtle); border-radius: 12px; border: 1px solid var(--border-color); font-size: 0.82rem; color: var(--text-secondary);">
-                        🎯 <strong>Daily Quest Progress</strong>: Reach 4,000 steps to automatically complete the Morning Stride quest and earn +50 XP and coins!
+                    <!-- Laptop/Desktop Route Simulators for instant testing -->
+                    <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center;">
+                        <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase;">Quick Simulate:</span>
+                        <button class="ex-category-badge" style="cursor: pointer; padding: 0.4rem 0.8rem;" onclick="window.stravaTracker.simulateRoute('ride')">🚴 12km Hill Ride</button>
+                        <button class="ex-category-badge" style="cursor: pointer; padding: 0.4rem 0.8rem;" onclick="window.stravaTracker.simulateRoute('run')">🏃 5km Sprint</button>
+                        <button class="ex-category-badge" style="cursor: pointer; padding: 0.4rem 0.8rem;" onclick="window.stravaTracker.simulateRoute('walk')">🚶 2km Walk</button>
+                        <button class="ex-category-badge" style="cursor: pointer; padding: 0.4rem 0.8rem;" onclick="window.app.simulateWalking(500)">+500 Steps</button>
                     </div>
                 </div>
             </div>
+
+            <!-- Splits & Achievements Grid -->
+            <div class="dashboard-grid">
+                <!-- Splits Breakdown Card -->
+                <div class="glass-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
+                        <h3 style="font-family: var(--font-heading); color: #fff; font-size: 1.1rem;">⏱️ Kilometer Splits</h3>
+                        <span class="kom-badge">⚡ Live Splits</span>
+                    </div>
+                    <div style="overflow-x: auto; max-height: 220px;">
+                        <table class="splits-table">
+                            <thead>
+                                <tr>
+                                    <th>KM</th>
+                                    <th>Pace / Speed</th>
+                                    <th>Elev +/-</th>
+                                    <th>Split Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="strava-splits-tbody">
+                                <tr><td colspan="4" style="color: var(--text-muted); text-align: center;">Start workout or simulate to generate splits!</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Recent Strava Workouts Feed -->
+                <div class="glass-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
+                        <h3 style="font-family: var(--font-heading); color: #fff; font-size: 1.1rem;">🏅 Saved Workouts</h3>
+                        <span style="font-size: 0.8rem; color: var(--blue); font-weight: 700;">Auto-Saved to DB</span>
+                    </div>
+                    <div id="strava-activities-feed" style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.6rem;">
+                        <div style="color: var(--text-muted); text-align: center; padding: 1rem;">No saved workouts yet. Complete your first ride or run!</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW: GYM BEATS WORKOUT MUSIC PLAYER -->
+        <section id="view-music" class="app-view">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h1 style="font-family: var(--font-heading); font-size: 2rem; color: #fff;">🎵 Gym Beats Workout Music</h1>
+                    <p style="color: var(--text-secondary);">High-BPM Phonk, Hardstyle, Beast Mode Hip-Hop & Metal to power your workouts and battles.</p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <span class="ex-category-badge" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5;">🔊 Web Audio Powered</span>
+                </div>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="glass-card" style="margin-bottom: 1.5rem; padding: 1rem 1.4rem;">
+                <div style="display: flex; gap: 0.8rem; align-items: center;">
+                    <span style="font-size: 1.4rem;">🔍</span>
+                    <input type="text" id="music-search-input" placeholder="Search workout tracks, artists, or genres (e.g., 'phonk', 'hardstyle', 'cardio')..." style="flex: 1; background: #121520; border: 1px solid var(--border-color); border-radius: 12px; padding: 0.75rem 1rem; color: #fff; font-size: 0.95rem; outline: none;" oninput="window.gymMusicPlayer.filterTracks(this.value)">
+                </div>
+                <div id="music-search-results" style="display: none; margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem;"></div>
+            </div>
+
+            <!-- Main Interactive Player Deck -->
+            <div class="music-deck-card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <span id="deck-station-badge" class="ex-category-badge" style="background: rgba(239, 68, 68, 0.25); color: #fca5a5; font-size: 0.8rem;">⚡ Aggressive Phonk & Drift</span>
+                        <h2 id="deck-track-title" style="font-family: var(--font-heading); font-size: 2rem; color: #fff; margin-top: 0.5rem; line-height: 1.2;">Ghost Rider Phonk</h2>
+                        <p id="deck-track-artist" style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 0.2rem;">FITBAT Records • Phonk / Drift (138 BPM)</p>
+                    </div>
+                    <!-- Volume Control -->
+                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                        <span style="font-size: 1.2rem;">🔊</span>
+                        <input type="range" class="music-vol-slider" min="0" max="1" step="0.05" value="0.8" style="accent-color: var(--blue); cursor: pointer;" oninput="window.gymMusicPlayer.setVolume(this.value)">
+                    </div>
+                </div>
+
+                <!-- Animated Audio Spectrum Visualizer -->
+                <canvas id="music-visualizer" class="audio-visualizer-canvas" width="800" height="80"></canvas>
+
+                <!-- Track Scrubber Bar -->
+                <div class="track-scrubber-bar" id="deck-scrubber-bar" onclick="const rect = this.getBoundingClientRect(); window.gymMusicPlayer.seek((event.clientX - rect.left) / rect.width)">
+                    <div class="track-scrubber-fill" id="deck-scrubber-fill"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-muted); margin-top: 0.4rem;">
+                    <span id="deck-current-time">0:00</span>
+                    <span id="deck-track-duration">3:05</span>
+                </div>
+
+                <!-- Playback Buttons -->
+                <div style="display: flex; justify-content: center; align-items: center; gap: 1.2rem; margin-top: 1.2rem;">
+                    <button class="music-control-btn" onclick="window.gymMusicPlayer.prev()" title="Previous Track">⏮️</button>
+                    <button class="music-control-btn play-main" id="deck-btn-play" onclick="window.gymMusicPlayer.togglePlay()" title="Play / Pause">▶️</button>
+                    <button class="music-control-btn" onclick="window.gymMusicPlayer.next()" title="Next Track">⏭️</button>
+                </div>
+
+                <!-- Tracklist for Current Station -->
+                <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 1.2rem;">
+                    <h4 style="font-family: var(--font-heading); color: #fff; font-size: 0.95rem; margin-bottom: 0.8rem;">Tracks in Station</h4>
+                    <div id="music-tracklist-container"></div>
+                </div>
+            </div>
+
+            <!-- Workout Stations Grid -->
+            <div style="margin-bottom: 1rem;">
+                <h3 style="font-family: var(--font-heading); font-size: 1.3rem; color: #fff;">🔥 Choose Workout Station</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Select a dedicated gym station matching your workout intensity.</p>
+            </div>
+            <div class="music-grid-stations" id="music-stations-container"></div>
         </section>
 
         <!-- VIEW 6: LEADERBOARDS -->
@@ -710,12 +852,43 @@
         </div>
     </div>
 
+    <!-- PERSISTENT GYM BEATS MINI-PLAYER DOCK (VISIBLE ON ALL PAGES) -->
+    <div class="persistent-music-mini-player" id="persistent-music-mini-player">
+        <div style="display: flex; align-items: center; gap: 0.9rem; cursor: pointer;" onclick="window.app.showView('music')">
+            <div class="mini-equalizer-bars">
+                <div class="mini-eq-bar"></div>
+                <div class="mini-eq-bar"></div>
+                <div class="mini-eq-bar"></div>
+                <div class="mini-eq-bar"></div>
+            </div>
+            <div>
+                <strong id="mini-track-title" style="font-size: 0.92rem; color: #fff; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;">Ghost Rider Phonk</strong>
+                <span id="mini-track-info" style="font-size: 0.74rem; color: var(--blue); font-weight: 700;">⚡ Aggressive Phonk & Drift</span>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.8rem;">
+            <button class="music-control-btn" style="width: 36px; height: 36px; font-size: 0.95rem;" onclick="window.gymMusicPlayer.prev()" title="Previous">⏮️</button>
+            <button class="music-control-btn" id="mini-btn-play" style="width: 44px; height: 44px; font-size: 1.1rem; background: var(--blue);" onclick="window.gymMusicPlayer.togglePlay()" title="Play / Pause">▶️</button>
+            <button class="music-control-btn" style="width: 36px; height: 36px; font-size: 0.95rem;" onclick="window.gymMusicPlayer.next()" title="Next">⏭️</button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1rem;">🔊</span>
+            <input type="range" class="music-vol-slider" min="0" max="1" step="0.05" value="0.8" style="width: 70px; accent-color: var(--blue); cursor: pointer;" oninput="window.gymMusicPlayer.setVolume(this.value)">
+            <button class="btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.78rem; margin-left: 0.4rem;" onclick="window.app.showView('music')">🎵 Player Deck</button>
+        </div>
+    </div>
+
     <!-- Scripts -->
+    <script src="/static/js/gym_background.js"></script>
     <script src="/static/js/sound.js"></script>
+    <script src="/static/js/music_player.js"></script>
     <script src="/static/js/cv_tracker.js"></script>
     <script src="/static/js/cartoon_coach.js"></script>
     <script src="/static/js/battle.js"></script>
     <script src="/static/js/chatbot.js"></script>
+    <script src="/static/js/strava_tracker.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

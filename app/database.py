@@ -189,6 +189,26 @@ def init_db():
     except Exception:
         pass
 
+    # Strava-grade Workouts Table (Cycling, Running, Walking, Hiking)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS strava_workouts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        sport_type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        distance_km REAL DEFAULT 0,
+        duration_seconds INTEGER DEFAULT 0,
+        avg_speed_kmh REAL DEFAULT 0,
+        max_speed_kmh REAL DEFAULT 0,
+        avg_pace_minkm TEXT DEFAULT '0:00',
+        elevation_gain_m REAL DEFAULT 0,
+        calories_burned REAL DEFAULT 0,
+        route_geojson TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+    """)
+
     # Seed Default Tasks if empty
     cursor.execute("SELECT COUNT(*) as count FROM daily_tasks")
     if cursor.fetchone()["count"] == 0:
