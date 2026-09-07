@@ -269,15 +269,9 @@
                         </div>
 
                         <!-- Real Friend Live Video Stream via WebRTC -->
-                        <video id="battle-opp-video" class="hidden" playsinline autoplay></video>
-
-                        <!-- AI Avatar Placeholder -->
-                        <div class="ai-fighter-card" id="battle-opp-placeholder">
-                            <div class="ai-avatar-pulse">🥊</div>
-                            <div style="font-family: var(--font-heading); margin-top: 0.8rem; color: #cbd5e1; font-size: 0.95rem; font-weight: 700;">
-                                LIVE SYNCHRONIZED OPPONENT
-                            </div>
-                        </div>
+                        <video id="battle-opp-video" playsinline autoplay muted></video>
+                        <!-- Live Synchronized Opponent Warrior Video Canvas -->
+                        <canvas id="battle-opp-canvas"></canvas>
 
                         <div class="combat-effects-container" id="opp-combat-effects"></div>
                     </div>

@@ -445,7 +445,20 @@ body {
     top: 0; left: 0;
     width: 100%; height: 100%;
     object-fit: cover;
-    transform: scaleX(-1); /* Mirrors both video and canvas skeleton in 100% hardware sync */
+    transform: scaleX(-1); /* Mirrors user selfie camera */
+}
+
+#battle-opp-video, #battle-opp-canvas {
+    transform: none !important; /* Opponent faces forward naturally */
+}
+
+#battle-opp-canvas {
+    z-index: 2;
+    background: radial-gradient(circle at center, #1a1e2e 0%, #090b14 100%);
+}
+
+#battle-opp-video {
+    z-index: 3;
 }
 
 .fighter-hud {

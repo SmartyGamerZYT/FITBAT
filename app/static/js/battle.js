@@ -97,6 +97,11 @@ class BattleArena {
             clearInterval(this.timerInterval);
             this.timerInterval = null;
         }
+        if (this.oppAnimId) {
+            cancelAnimationFrame(this.oppAnimId);
+            this.oppAnimId = null;
+        }
+        this.hasPeerCamera = false;
         if (this.ws) {
             try { this.ws.close(); } catch (e) {}
             this.ws = null;
@@ -108,6 +113,12 @@ class BattleArena {
         if (window.poseTracker) {
             window.poseTracker.stop();
         }
+        const oppVideo = document.getElementById("battle-opp-video");
+        if (oppVideo) {
+            oppVideo.srcObject = null;
+        }
+        const coachEl = document.getElementById("battle-cartoon-coach-container");
+        if (coachEl) coachEl.innerHTML = "";
         this.hideWaitingForFriendModal();
     }
 
@@ -176,10 +187,12 @@ class BattleArena {
                 this.showBattleOverlay(`MATCH CONNECTED! [${theme.icon} ${this.currentExercise.replace(/_/g, ' ').toUpperCase()}] 3... 2... 1... FIGHT!`);
                 this.startTimer(data.duration || 45);
 
+                // ALWAYS start the live opponent video stream
+                this.hasPeerCamera = false;
+                this.startOpponentVideoStream(this.currentExercise, this.opponentName);
+
                 if (!data.opponent.is_ai) {
                     await this.initWebRTCPeerConnection();
-                } else {
-                    this.showAIOpponentView();
                 }
                 break;
 
@@ -187,6 +200,7 @@ class BattleArena {
                 this.oppReps = data.reps;
                 this.oppCombo = data.combo || (this.oppCombo + 1);
                 this.updateOpponentHUD();
+                this.triggerOpponentRepBurst();
                 this.spawnCombatEffect("opponent", data.is_critical ? "CRITICAL HIT!" : "+1 REP!", data.is_critical);
                 if (window.soundEngine) window.soundEngine.playPunch();
                 break;
@@ -239,6 +253,7 @@ class BattleArena {
             ]
         };
         this.peerConnection = new RTCPeerConnection(config);
+        this.pendingIceCandidates = [];
 
         // Ensure we obtain camera tracks reliably
         let stream = (window.poseTracker && window.poseTracker.stream);
@@ -247,7 +262,6 @@ class BattleArena {
             stream = localVideo.srcObject;
         }
 
-        // If camera stream is still initializing, wait up to 2.5s for it
         if (!stream) {
             for (let i = 0; i < 15; i++) {
                 await new Promise(r => setTimeout(r, 150));
@@ -263,8 +277,10 @@ class BattleArena {
         }
 
         this.peerConnection.ontrack = (event) => {
+            console.log("[WebRTC] Received remote opponent peer camera track!");
+            this.hasPeerCamera = true;
             const oppVideo = document.getElementById("battle-opp-video");
-            const oppPlaceholder = document.getElementById("battle-opp-placeholder");
+            const oppCanvas = document.getElementById("battle-opp-canvas");
             if (oppVideo) {
                 if (event.streams && event.streams[0]) {
                     oppVideo.srcObject = event.streams[0];
@@ -273,11 +289,14 @@ class BattleArena {
                     oppVideo.srcObject.addTrack(event.track);
                 }
                 oppVideo.classList.remove("hidden");
+                oppVideo.style.display = "block";
                 oppVideo.setAttribute("playsinline", "true");
                 oppVideo.muted = true;
                 oppVideo.autoplay = true;
                 oppVideo.play().catch(e => console.warn("Opponent video autoplay error:", e));
-                if (oppPlaceholder) oppPlaceholder.classList.add("hidden");
+            }
+            if (oppCanvas) {
+                oppCanvas.style.display = "none";
             }
         };
 
@@ -306,6 +325,12 @@ class BattleArena {
     async handleWebRTCOffer(offer) {
         if (!this.peerConnection) await this.initWebRTCPeerConnection();
         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        if (this.pendingIceCandidates) {
+            for (const c of this.pendingIceCandidates) {
+                try { await this.peerConnection.addIceCandidate(new RTCIceCandidate(c)); } catch (e) {}
+            }
+            this.pendingIceCandidates = [];
+        }
         const answer = await this.peerConnection.createAnswer();
         await this.peerConnection.setLocalDescription(answer);
         this.ws.send(JSON.stringify({
@@ -317,24 +342,313 @@ class BattleArena {
     async handleWebRTCAnswer(answer) {
         if (this.peerConnection) {
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            if (this.pendingIceCandidates) {
+                for (const c of this.pendingIceCandidates) {
+                    try { await this.peerConnection.addIceCandidate(new RTCIceCandidate(c)); } catch (e) {}
+                }
+                this.pendingIceCandidates = [];
+            }
         }
     }
 
     async handleWebRTCIceCandidate(candidate) {
-        if (this.peerConnection) {
+        if (this.peerConnection && this.peerConnection.remoteDescription) {
             try {
                 await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
             } catch (e) {
                 console.warn("Error adding ICE candidate:", e);
             }
+        } else {
+            if (!this.pendingIceCandidates) this.pendingIceCandidates = [];
+            this.pendingIceCandidates.push(candidate);
         }
     }
 
-    showAIOpponentView() {
+    triggerOpponentRepBurst() {
+        this.oppRepBurst = 1.0;
+    }
+
+    // High-Definition Live Opponent Video Generator
+    startOpponentVideoStream(exerciseId, opponentName) {
+        const oppCanvas = document.getElementById("battle-opp-canvas");
         const oppVideo = document.getElementById("battle-opp-video");
-        const oppPlaceholder = document.getElementById("battle-opp-placeholder");
-        if (oppVideo) oppVideo.classList.add("hidden");
-        if (oppPlaceholder) oppPlaceholder.classList.remove("hidden");
+        if (!oppCanvas) return;
+
+        if (this.oppAnimId) {
+            cancelAnimationFrame(this.oppAnimId);
+            this.oppAnimId = null;
+        }
+
+        const ctx = oppCanvas.getContext("2d");
+        oppCanvas.width = 640;
+        oppCanvas.height = 480;
+        oppCanvas.style.display = "block";
+
+        if (oppVideo) {
+            oppVideo.classList.remove("hidden");
+            oppVideo.style.display = "block";
+            try {
+                if (oppCanvas.captureStream && !this.hasPeerCamera) {
+                    const stream = oppCanvas.captureStream(30);
+                    oppVideo.srcObject = stream;
+                    oppVideo.muted = true;
+                    oppVideo.play().catch(() => {});
+                }
+            } catch (e) {
+                console.log("[OpponentVideo] Native canvas video active");
+            }
+        }
+
+        let frame = 0;
+        this.oppRepBurst = 0;
+
+        const render = () => {
+            if (!this.isBattleActive) return;
+            frame++;
+            if (this.oppRepBurst > 0) this.oppRepBurst -= 0.035;
+
+            const w = oppCanvas.width;
+            const h = oppCanvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            // 1. Gym Battle Octagon Stage
+            const bgGrad = ctx.createRadialGradient(w / 2, h * 0.45, 40, w / 2, h * 0.45, w * 0.7);
+            bgGrad.addColorStop(0, "#1d2238");
+            bgGrad.addColorStop(0.6, "#101322");
+            bgGrad.addColorStop(1, "#07080e");
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, w, h);
+
+            // Octagon Ring Floor Lines
+            const floorY = h * 0.82;
+            ctx.strokeStyle = "rgba(239, 68, 68, 0.22)";
+            ctx.lineWidth = 1.5;
+            for (let x = -w * 0.4; x <= w * 1.4; x += 60) {
+                ctx.beginPath();
+                ctx.moveTo(x, floorY);
+                ctx.lineTo(w / 2 + (x - w / 2) * 1.8, h);
+                ctx.stroke();
+            }
+
+            // Glowing Red Mat Ring
+            ctx.beginPath();
+            ctx.ellipse(w / 2, floorY + 12, w * 0.36, 26, 0, 0, Math.PI * 2);
+            ctx.fillStyle = this.oppRepBurst > 0 ? `rgba(239, 68, 68, ${0.15 + this.oppRepBurst * 0.3})` : "rgba(239, 68, 68, 0.12)";
+            ctx.fill();
+            ctx.stroke();
+
+            // 2. Athletic Opponent Performing the Active Exercise
+            this.drawOpponentAthlete(ctx, w, h, floorY, exerciseId, frame, this.oppRepBurst, opponentName);
+
+            // 3. Live Video Overlay Badge
+            ctx.fillStyle = "rgba(11, 13, 20, 0.88)";
+            ctx.strokeStyle = "rgba(239, 68, 68, 0.4)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(14, 14, 215, 30, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            // Glowing Live Pulse Dot
+            ctx.fillStyle = "#ef4444";
+            ctx.shadowColor = "#ef4444";
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.arc(28, 29, 4.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.font = "bold 11px sans-serif";
+            ctx.fillStyle = "#f8fafc";
+            ctx.textAlign = "left";
+            ctx.fillText(`LIVE RIVAL: ${opponentName.substring(0, 16).toUpperCase()}`, 38, 33);
+
+            this.oppAnimId = requestAnimationFrame(render);
+        };
+
+        this.oppAnimId = requestAnimationFrame(render);
+    }
+
+    drawOpponentAthlete(ctx, w, h, floorY, exerciseId, frame, burst, name) {
+        ctx.save();
+        const cx = w / 2;
+        const cy = floorY - 90;
+
+        // Aura on Rep Burst
+        if (burst > 0) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, 110 * (1 + (1 - burst) * 0.4), 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(239, 68, 68, ${burst * 0.8})`;
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        }
+
+        // Exercise-specific full body biomechanics
+        if (exerciseId === "frog_jumps") {
+            // 🐸 Frog Jump: Deep crouch -> Explosive vertical leap -> Landing
+            const cycle = (frame * 0.07) % (Math.PI * 2);
+            const isJumping = Math.sin(cycle) > 0;
+            const leapY = isJumping ? -Math.sin(cycle) * 75 : 0;
+            const squatDip = !isJumping ? Math.abs(Math.sin(cycle)) * 40 : 0;
+            const currentY = floorY - 80 + leapY + squatDip;
+
+            // Head & Torso
+            ctx.fillStyle = "#ef4444";
+            ctx.fillRect(cx - 22, currentY - 60, 44, 55); // Athletic red tank
+            ctx.beginPath(); ctx.arc(cx, currentY - 82, 18, 0, Math.PI * 2); ctx.fillStyle = "#fbcfe8"; ctx.fill(); // Head
+            // Headband
+            ctx.fillStyle = "#10b981"; ctx.fillRect(cx - 18, currentY - 92, 36, 7);
+
+            // Legs
+            ctx.lineWidth = 8; ctx.lineCap = "round"; ctx.strokeStyle = "#1e293b";
+            if (isJumping) {
+                // Tucked in air
+                ctx.beginPath(); ctx.moveTo(cx - 14, currentY - 10); ctx.lineTo(cx - 28, currentY + 15); ctx.lineTo(cx - 18, currentY + 30); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(cx + 14, currentY - 10); ctx.lineTo(cx + 28, currentY + 15); ctx.lineTo(cx + 18, currentY + 30); ctx.stroke();
+            } else {
+                // Deep crouch on floor
+                ctx.beginPath(); ctx.moveTo(cx - 14, currentY - 10); ctx.lineTo(cx - 36, currentY + 20); ctx.lineTo(cx - 22, floorY); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(cx + 14, currentY - 10); ctx.lineTo(cx + 36, currentY + 20); ctx.lineTo(cx + 22, floorY); ctx.stroke();
+            }
+
+            // Arms reaching floor or reaching up in leap
+            ctx.strokeStyle = "#fbcfe8"; ctx.lineWidth = 6;
+            if (isJumping) {
+                ctx.beginPath(); ctx.moveTo(cx - 20, currentY - 50); ctx.lineTo(cx - 35, currentY - 95); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(cx + 20, currentY - 50); ctx.lineTo(cx + 35, currentY - 95); ctx.stroke();
+            } else {
+                ctx.beginPath(); ctx.moveTo(cx - 20, currentY - 50); ctx.lineTo(cx - 30, floorY - 5); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(cx + 20, currentY - 50); ctx.lineTo(cx + 30, floorY - 5); ctx.stroke();
+            }
+
+        } else if (exerciseId === "pushups") {
+            // 💪 Pushups: Horizontal prone plank on floor with chest dip
+            const cycle = Math.sin(frame * 0.08);
+            const dip = (cycle + 1) * 16; // 0 to 32px dip
+            const pushY = floorY - 28 + dip;
+
+            // Prone Body line
+            ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 22; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.moveTo(cx - 65, pushY - 8); ctx.lineTo(cx + 70, floorY - 12); ctx.stroke();
+
+            // Head
+            ctx.beginPath(); ctx.arc(cx - 85, pushY - 12, 16, 0, Math.PI * 2); ctx.fillStyle = "#fbcfe8"; ctx.fill();
+
+            // Arms from shoulder to floor
+            ctx.strokeStyle = "#fbcfe8"; ctx.lineWidth = 7;
+            const elbowX = cx - 55 - (cycle * 12);
+            ctx.beginPath(); ctx.moveTo(cx - 60, pushY - 4); ctx.lineTo(elbowX, pushY + 18); ctx.lineTo(cx - 50, floorY); ctx.stroke();
+
+            // Feet planted on floor
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(cx + 65, floorY - 10, 16, 8);
+
+        } else if (exerciseId === "squats") {
+            // 🦵 Squats: Sinking into 90° parallel squat and driving up
+            const cycle = (Math.sin(frame * 0.075) + 1) * 0.5; // 0 to 1
+            const squatY = floorY - 85 + (cycle * 48);
+
+            // Torso & Head
+            ctx.fillStyle = "#ef4444";
+            ctx.fillRect(cx - 20, squatY - 58, 40, 52);
+            ctx.beginPath(); ctx.arc(cx, squatY - 78, 17, 0, Math.PI * 2); ctx.fillStyle = "#fbcfe8"; ctx.fill();
+
+            // Arms extended forward for balance
+            ctx.strokeStyle = "#fbcfe8"; ctx.lineWidth = 6; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.moveTo(cx - 16, squatY - 45); ctx.lineTo(cx - 55, squatY - 45); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx + 16, squatY - 45); ctx.lineTo(cx + 55, squatY - 45); ctx.stroke();
+
+            // Legs
+            ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 8;
+            const kneeOut = cycle * 24;
+            ctx.beginPath(); ctx.moveTo(cx - 14, squatY - 8); ctx.lineTo(cx - 28 - kneeOut, squatY + 25); ctx.lineTo(cx - 20, floorY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx + 14, squatY - 8); ctx.lineTo(cx + 28 + kneeOut, squatY + 25); ctx.lineTo(cx + 20, floorY); ctx.stroke();
+
+        } else if (exerciseId === "bicep_curls") {
+            // 💥 Bicep Curls: Curling dumbbells
+            const lCycle = Math.sin(frame * 0.09);
+            const rCycle = Math.cos(frame * 0.09);
+            const charY = floorY - 85;
+
+            // Torso & Head
+            ctx.fillStyle = "#ef4444"; ctx.fillRect(cx - 22, charY - 60, 44, 55);
+            ctx.beginPath(); ctx.arc(cx, charY - 80, 18, 0, Math.PI * 2); ctx.fillStyle = "#fbcfe8"; ctx.fill();
+
+            // Legs standing tall
+            ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 8; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.moveTo(cx - 12, charY - 5); ctx.lineTo(cx - 15, floorY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx + 12, charY - 5); ctx.lineTo(cx + 15, floorY); ctx.stroke();
+
+            // Left & Right Curling Arms
+            ctx.strokeStyle = "#fbcfe8"; ctx.lineWidth = 7;
+            const lHandY = charY - 20 - (lCycle * 32);
+            ctx.beginPath(); ctx.moveTo(cx - 22, charY - 50); ctx.lineTo(cx - 32, charY - 25); ctx.lineTo(cx - 26, lHandY); ctx.stroke();
+            ctx.fillStyle = "#38bdf8"; ctx.fillRect(cx - 32, lHandY - 6, 12, 12); // Dumbbell
+
+            const rHandY = charY - 20 - (rCycle * 32);
+            ctx.beginPath(); ctx.moveTo(cx + 22, charY - 50); ctx.lineTo(cx + 32, charY - 25); ctx.lineTo(cx + 26, rHandY); ctx.stroke();
+            ctx.fillStyle = "#38bdf8"; ctx.fillRect(cx + 20, rHandY - 6, 12, 12);
+
+        } else if (exerciseId === "shadow_boxing") {
+            // 🥊 Shadow Boxing: Punching combinations with boxing gloves
+            const punchL = Math.max(0, Math.sin(frame * 0.12)) * 42;
+            const punchR = Math.max(0, Math.cos(frame * 0.12)) * 42;
+            const bounceY = Math.abs(Math.sin(frame * 0.15)) * 8;
+            const charY = floorY - 85 - bounceY;
+
+            // Torso
+            ctx.fillStyle = "#ef4444"; ctx.fillRect(cx - 20, charY - 58, 40, 52);
+            ctx.beginPath(); ctx.arc(cx, charY - 78, 17, 0, Math.PI * 2); ctx.fillStyle = "#fbcfe8"; ctx.fill();
+
+            // Boxing Stance Legs
+            ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 8; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.moveTo(cx - 10, charY - 6); ctx.lineTo(cx - 26, floorY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx + 10, charY - 6); ctx.lineTo(cx + 24, floorY); ctx.stroke();
+
+            // Punching Arms + Red Gloves
+            ctx.strokeStyle = "#fbcfe8"; ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.moveTo(cx - 18, charY - 45); ctx.lineTo(cx - 25 - punchL, charY - 45); ctx.stroke();
+            ctx.fillStyle = "#ff2a4b"; ctx.beginPath(); ctx.arc(cx - 28 - punchL, charY - 45, 10, 0, Math.PI * 2); ctx.fill();
+
+            ctx.beginPath(); ctx.moveTo(cx + 18, charY - 45); ctx.lineTo(cx + 25 + punchR, charY - 45); ctx.stroke();
+            ctx.fillStyle = "#ff2a4b"; ctx.beginPath(); ctx.arc(cx + 28 + punchR, charY - 45, 10, 0, Math.PI * 2); ctx.fill();
+
+        } else if (exerciseId === "plank") {
+            // 🛡️ Plank: Iron core static hold with cyan aura
+            const vibe = Math.sin(frame * 0.6) * 1.5;
+            const plankY = floorY - 28 + vibe;
+
+            ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 20; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.moveTo(cx - 65, plankY); ctx.lineTo(cx + 65, plankY - 5); ctx.stroke();
+            ctx.beginPath(); ctx.arc(cx - 80, plankY - 5, 16, 0, Math.PI * 2); ctx.fillStyle = "#fbcfe8"; ctx.fill();
+
+            // Forearms on floor
+            ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.moveTo(cx - 55, plankY); ctx.lineTo(cx - 55, floorY); ctx.lineTo(cx - 40, floorY); ctx.stroke();
+
+            // Core aura
+            ctx.strokeStyle = "rgba(56, 189, 248, 0.4)"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(cx, plankY, 55, 16, 0, 0, Math.PI * 2); ctx.stroke();
+
+        } else {
+            // General energetic workout rep cycle (Jumping jacks, high knees, lunges, climbers)
+            const cycle = Math.sin(frame * 0.1);
+            const hopY = Math.abs(cycle) * 16;
+            const charY = floorY - 85 - hopY;
+
+            ctx.fillStyle = "#ef4444"; ctx.fillRect(cx - 20, charY - 58, 40, 52);
+            ctx.beginPath(); ctx.arc(cx, charY - 78, 17, 0, Math.PI * 2); ctx.fillStyle = "#fbcfe8"; ctx.fill();
+
+            ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 8; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.moveTo(cx - 12, charY - 6); ctx.lineTo(cx - 22, floorY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx + 12, charY - 6); ctx.lineTo(cx + 22, floorY); ctx.stroke();
+
+            ctx.strokeStyle = "#fbcfe8"; ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.moveTo(cx - 18, charY - 45); ctx.lineTo(cx - 42, charY - 65 - cycle * 15); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cx + 18, charY - 45); ctx.lineTo(cx + 42, charY - 65 + cycle * 15); ctx.stroke();
+        }
+
+        ctx.restore();
     }
 
     startTimer(seconds) {
