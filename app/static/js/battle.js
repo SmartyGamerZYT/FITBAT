@@ -16,6 +16,7 @@ class BattleArena {
         this.peerConnection = null;
         this.isInitiator = false;
         this.roomCode = null;
+        this.roomId = null;
         this.isCreator = false;
     }
 
@@ -107,6 +108,7 @@ class BattleArena {
             this.oppAnimId = null;
         }
         this.hasPeerCamera = false;
+        this.roomId = null;
         if (this.ws) {
             try { this.ws.close(); } catch (e) {}
             this.ws = null;
@@ -137,6 +139,7 @@ class BattleArena {
 
             case "ROOM_CREATED":
                 this.roomCode = data.room_code;
+                this.roomId = data.room_code;
                 this.showWaitingForFriendModal(data.room_code);
                 break;
 
@@ -148,6 +151,7 @@ class BattleArena {
                 this.hideWaitingForFriendModal();
                 this.hideMatchmakingModal();
                 
+                this.roomId = data.room_id;
                 this.isBattleActive = true;
                 this.opponentName = data.opponent.username;
                 this.isInitiator = data.is_initiator || false;
@@ -316,6 +320,7 @@ class BattleArena {
             if (event.candidate && this.ws && this.ws.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify({
                     type: "WEBRTC_ICE_CANDIDATE",
+                    room_id: this.roomId,
                     candidate: event.candidate
                 }));
             }
@@ -331,6 +336,7 @@ class BattleArena {
                 if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                     this.ws.send(JSON.stringify({
                         type: "WEBRTC_OFFER",
+                        room_id: this.roomId,
                         offer: offer
                     }));
                 }
@@ -368,6 +374,7 @@ class BattleArena {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({
                 type: "WEBRTC_ANSWER",
+                room_id: this.roomId,
                 answer: answer
             }));
         }
@@ -738,6 +745,7 @@ class BattleArena {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({
                 type: "REP_PERFORMED",
+                room_id: this.roomId,
                 reps: this.userReps,
                 form_score: formScore
             }));
@@ -820,7 +828,7 @@ class BattleArena {
     finishRound() {
         this.isBattleActive = false;
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ type: "FINISH_ROUND" }));
+            this.ws.send(JSON.stringify({ type: "FINISH_ROUND", room_id: this.roomId }));
         }
     }
 
@@ -881,7 +889,7 @@ class BattleArena {
         // Notify server that user is surrendering/exiting so the opponent finishes the match too
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             try {
-                this.ws.send(JSON.stringify({ type: "FINISH_ROUND", surrender: true }));
+                this.ws.send(JSON.stringify({ type: "FINISH_ROUND", room_id: this.roomId, surrender: true }));
             } catch (e) {}
         }
         this.cleanupSession();

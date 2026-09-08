@@ -400,7 +400,7 @@ class GymMusicPlayer {
         if (infoEl) infoEl.textContent = `${station.icon} ${station.name} (${station.bpm} BPM)`;
     }
 
-    filterTracks(query) {
+    async filterTracks(query) {
         const q = (query || "").toLowerCase().trim();
         const container = document.getElementById("music-search-results");
         if (!container) return;
@@ -412,25 +412,27 @@ class GymMusicPlayer {
         }
 
         container.style.display = "block";
-        const results = [];
+        const localResults = [];
         this.stations.forEach(st => {
             st.tracks.forEach((tr, tIdx) => {
                 if (tr.title.toLowerCase().includes(q) || tr.artist.toLowerCase().includes(q) || st.name.toLowerCase().includes(q) || st.genre.toLowerCase().includes(q)) {
-                    results.push({ stationId: st.id, trackIndex: tIdx, track: tr, station: st });
+                    localResults.push({ stationId: st.id, trackIndex: tIdx, track: tr, station: st });
                 }
             });
         });
 
-        if (results.length === 0) {
-            container.innerHTML = `<div style="padding: 1rem; color: var(--text-muted); text-align: center;">No tracks found matching "${query}". Try "phonk", "hardstyle", "rock" or "cardio"!</div>`;
-            return;
-        }
-
-        container.innerHTML = `
-            <div style="font-size: 0.85rem; font-weight: 800; color: var(--blue); margin-bottom: 0.6rem; text-transform: uppercase;">
-                🔍 Search Results (${results.length})
+        // Show local results first or loading message
+        let html = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                <span style="font-size: 0.85rem; font-weight: 800; color: var(--blue); text-transform: uppercase;">
+                    🌐 Worldwide Music Search
+                </span>
+                <span id="music-search-loading" style="font-size: 0.78rem; color: var(--amber);">Searching global tracks...</span>
             </div>
-            ${results.map(r => `
+        `;
+
+        if (localResults.length > 0) {
+            html += localResults.map(r => `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.9rem; background: rgba(22, 25, 38, 0.95); border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 0.4rem; cursor: pointer;" onclick="window.gymMusicPlayer.selectStation('${r.stationId}'); window.gymMusicPlayer.selectTrack(${r.trackIndex});">
                     <div>
                         <strong style="font-size: 0.92rem; color: #fff;">${r.track.title}</strong>
@@ -438,8 +440,85 @@ class GymMusicPlayer {
                     </div>
                     <button class="btn-primary" style="padding: 0.3rem 0.8rem; font-size: 0.76rem;">Play ⚡</button>
                 </div>
-            `).join("")}
-        `;
+            `).join("");
+        }
+
+        container.innerHTML = html;
+
+        // Fetch worldwide tracks from iTunes API (free, CORS-enabled, any song worldwide)
+        try {
+            const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=15`);
+            const data = await res.json();
+            const loadingEl = document.getElementById("music-search-loading");
+            if (loadingEl) loadingEl.textContent = `${data.results ? data.results.length : 0} online tracks found`;
+
+            if (data.results && data.results.length > 0) {
+                this.onlineTracks = data.results.filter(r => r.previewUrl);
+                const onlineHtml = this.onlineTracks.map((item, idx) => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.9rem; background: rgba(20, 24, 38, 0.95); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 10px; margin-bottom: 0.4rem; cursor: pointer;" onclick="window.gymMusicPlayer.playOnlineTrack(${idx})">
+                        <div style="display: flex; align-items: center; gap: 0.8rem;">
+                            <img src="${item.artworkUrl60 || item.artworkUrl100 || ''}" alt="Cover" style="width: 42px; height: 42px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border-color);">
+                            <div>
+                                <strong style="font-size: 0.92rem; color: #fff;">${item.trackName}</strong>
+                                <div style="font-size: 0.76rem; color: var(--text-secondary);">🌍 ${item.artistName} • ${item.collectionName || 'Single'}</div>
+                            </div>
+                        </div>
+                        <button class="btn-primary" style="padding: 0.35rem 0.85rem; font-size: 0.78rem; background: linear-gradient(135deg, #2563eb, #1d4ed8);">▶ Stream</button>
+                    </div>
+                `).join("");
+                
+                container.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                        <span style="font-size: 0.85rem; font-weight: 800; color: var(--blue); text-transform: uppercase;">
+                            🌐 Worldwide Online Music (${data.results.length} results)
+                        </span>
+                        <span style="font-size: 0.75rem; color: var(--emerald);">✓ Instant High Quality Stream</span>
+                    </div>
+                    ${onlineHtml}
+                `;
+            } else if (localResults.length === 0) {
+                container.innerHTML = `<div style="padding: 1rem; color: var(--text-muted); text-align: center;">No online or local tracks found for "${query}". Try searching another artist, song, or workout beat!</div>`;
+            }
+        } catch (err) {
+            console.warn("Online music search error:", err);
+            const loadingEl = document.getElementById("music-search-loading");
+            if (loadingEl) loadingEl.textContent = "Offline mode active";
+        }
+    }
+
+    playOnlineTrack(index) {
+        if (!this.onlineTracks || !this.onlineTracks[index]) return;
+        const item = this.onlineTracks[index];
+
+        // Create virtual station for this online track
+        const onlineStation = {
+            id: `online_${item.trackId}`,
+            name: item.artistName,
+            icon: "🌍",
+            bpm: 135,
+            genre: item.primaryGenreName || "Global Music",
+            desc: item.collectionName || "Worldwide Music Stream",
+            tracks: [
+                {
+                    title: item.trackName,
+                    artist: item.artistName,
+                    duration: Math.round((item.trackTimeMillis || 30000) / 1000),
+                    stream: item.previewUrl,
+                    artwork: item.artworkUrl100
+                }
+            ]
+        };
+
+        this.stations = [onlineStation, ...this.stations.filter(s => !s.id.startsWith("online_"))];
+        this.currentStation = onlineStation;
+        this.currentTrackIndex = 0;
+        this.renderStations();
+        this.renderDeck();
+        this.play();
+
+        // Close search dropdown
+        const searchBox = document.getElementById("music-search-results");
+        if (searchBox) searchBox.style.display = "none";
     }
 
     setupVisualizer() {

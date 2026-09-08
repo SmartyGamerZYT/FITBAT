@@ -23,6 +23,7 @@ class BattleRoom:
 class BattleManager:
     def __init__(self):
         self.active_rooms: Dict[str, BattleRoom] = {}
+        self.ws_to_room: Dict[WebSocket, str] = {}
         # Queue entries: {"ws": ws, "user_id": uid, "username": name, "exercise_id": eid, "age_group": ag, "joined_at": ts}
         self.waiting_queue: List[dict] = []
 
@@ -50,11 +51,13 @@ class BattleManager:
                     "is_ai": False,
                     "ws": websocket
                 }
+                self.ws_to_room[websocket] = clean_code
                 room.is_active = True
                 room.start_time = time.time()
 
                 # Get Player 1
                 p1_ws = [ws for ws in room.players.keys() if ws != websocket][0]
+                self.ws_to_room[p1_ws] = clean_code
                 p1_data = room.players[p1_ws]
 
                 print(f"[BattleManager] Friend joined Private Arena {clean_code}! Pairing {p1_data['username']} and {username}")
@@ -101,6 +104,7 @@ class BattleManager:
                     "ws": websocket
                 }
                 self.active_rooms[clean_code] = room
+                self.ws_to_room[websocket] = clean_code
 
                 print(f"[BattleManager] Created Private Arena {clean_code} for user {username}")
 
@@ -225,6 +229,8 @@ class BattleManager:
         }
 
         self.active_rooms[room_id] = room
+        self.ws_to_room[p1_ws] = room_id
+        self.ws_to_room[p2_ws] = room_id
         print(f"[Matchmaker] PAIRED: {p1_entry['username']} vs {p2_entry['username']} in {room_id}")
 
         # Notify Player 1 (Initiator for WebRTC stream)
@@ -292,6 +298,7 @@ class BattleManager:
         }
 
         self.active_rooms[room_id] = room
+        self.ws_to_room[websocket] = room_id
 
         try:
             await websocket.send_json({
@@ -310,9 +317,10 @@ class BattleManager:
         return room_id
 
     async def forward_webrtc_signaling(self, websocket: WebSocket, room_id: str, data: dict):
-        if room_id not in self.active_rooms:
+        effective_room_id = room_id if (room_id and room_id in self.active_rooms) else self.ws_to_room.get(websocket, room_id)
+        if effective_room_id not in self.active_rooms:
             return
-        room = self.active_rooms[room_id]
+        room = self.active_rooms[effective_room_id]
         for ws in room.players.keys():
             if ws != websocket:
                 try:
@@ -347,9 +355,10 @@ class BattleManager:
             pass
 
     async def handle_player_rep(self, websocket: WebSocket, room_id: str, rep_count: int, form_score: float):
-        if room_id not in self.active_rooms:
+        effective_room_id = room_id if (room_id and room_id in self.active_rooms) else self.ws_to_room.get(websocket, room_id)
+        if effective_room_id not in self.active_rooms:
             return
-        room = self.active_rooms[room_id]
+        room = self.active_rooms[effective_room_id]
         if websocket not in room.players:
             return
 
@@ -374,11 +383,12 @@ class BattleManager:
         if triggering_ws:
             self.waiting_queue = [e for e in self.waiting_queue if e["ws"] != triggering_ws]
 
-        if room_id not in self.active_rooms:
+        effective_room_id = room_id if (room_id and room_id in self.active_rooms) else (self.ws_to_room.get(triggering_ws) if triggering_ws else room_id)
+        if not effective_room_id or effective_room_id not in self.active_rooms:
             return
         
-        print(f"[BATTLE] Finishing match {room_id}")
-        room = self.active_rooms[room_id]
+        print(f"[BATTLE] Finishing match {effective_room_id}")
+        room = self.active_rooms[effective_room_id]
         room.is_active = False
 
         if room.ai_task and not room.ai_task.done():
@@ -467,8 +477,11 @@ class BattleManager:
                     except Exception:
                         pass
 
-        if room_id in self.active_rooms:
-            del self.active_rooms[room_id]
+        # Cleanup ws_to_room and active_rooms
+        for ws in list(room.players.keys()):
+            self.ws_to_room.pop(ws, None)
+        if effective_room_id in self.active_rooms:
+            del self.active_rooms[effective_room_id]
 
     def record_match_result(self, user_id: int, opponent_name: str, opponent_type: str, 
                             age_group: str, exercise_id: str, user_reps: int, 

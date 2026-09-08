@@ -802,20 +802,23 @@ async def websocket_battle_endpoint(websocket: WebSocket, token: Optional[str] =
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type")
+            current_room_id = data.get("room_id") or battle_manager.ws_to_room.get(websocket) or room_id
 
             if msg_type == "REP_PERFORMED":
                 rep_count = data.get("reps", 0)
                 form_score = data.get("form_score", 1.0)
-                await battle_manager.handle_player_rep(websocket, room_id, rep_count, form_score)
+                await battle_manager.handle_player_rep(websocket, current_room_id, rep_count, form_score)
 
             elif msg_type in ["WEBRTC_OFFER", "WEBRTC_ANSWER", "WEBRTC_ICE_CANDIDATE"]:
-                await battle_manager.forward_webrtc_signaling(websocket, room_id, data)
+                await battle_manager.forward_webrtc_signaling(websocket, current_room_id, data)
 
             elif msg_type == "FINISH_ROUND":
-                await battle_manager.finish_match(room_id, websocket)
+                await battle_manager.finish_match(current_room_id, websocket)
                 break
 
     except WebSocketDisconnect:
-        await battle_manager.finish_match(room_id, websocket)
+        current_room_id = battle_manager.ws_to_room.get(websocket) or room_id
+        await battle_manager.finish_match(current_room_id, websocket)
     except Exception:
-        await battle_manager.finish_match(room_id, websocket)
+        current_room_id = battle_manager.ws_to_room.get(websocket) or room_id
+        await battle_manager.finish_match(current_room_id, websocket)
