@@ -45,6 +45,23 @@ class BattleArena {
             wsUrl += `&room_code=${encodeURIComponent(roomCode)}`;
         }
 
+        // 1. Initialize Local Camera / Pose Tracker FIRST so video tracks are immediately available for WebRTC
+        const video = document.getElementById("battle-user-video");
+        const canvas = document.getElementById("battle-user-canvas");
+
+        window.poseTracker.setExercise(exerciseId);
+        try {
+            await window.poseTracker.init(
+                video,
+                canvas,
+                this.onPlayerRep.bind(this),
+                this.onPlayerFeedback.bind(this)
+            );
+        } catch (e) {
+            console.warn("Error initializing pose tracker camera:", e);
+        }
+
+        // 2. Now connect to Battle WebSocket
         try {
             this.ws = new WebSocket(wsUrl);
 
@@ -71,18 +88,6 @@ class BattleArena {
         } catch (e) {
             console.error("Failed to connect websocket:", e);
         }
-
-        // Initialize Local Pose Tracker with Camera
-        const video = document.getElementById("battle-user-video");
-        const canvas = document.getElementById("battle-user-canvas");
-
-        window.poseTracker.setExercise(exerciseId);
-        await window.poseTracker.init(
-            video,
-            canvas,
-            this.onPlayerRep.bind(this),
-            this.onPlayerFeedback.bind(this)
-        );
 
         if (isCreator && roomCode) {
             this.showWaitingForFriendModal(roomCode);
@@ -245,6 +250,7 @@ class BattleArena {
     }
 
     async initWebRTCPeerConnection() {
+        if (this.peerConnection) return;
         const config = {
             iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
@@ -255,7 +261,14 @@ class BattleArena {
         this.peerConnection = new RTCPeerConnection(config);
         this.pendingIceCandidates = [];
 
-        // Ensure we obtain camera tracks reliably
+        // Ensure transceiver is set so video can be received even if camera is starting
+        try {
+            this.peerConnection.addTransceiver('video', { direction: 'sendrecv' });
+        } catch (e) {
+            console.warn("addTransceiver error:", e);
+        }
+
+        // Obtain local camera stream
         let stream = (window.poseTracker && window.poseTracker.stream);
         const localVideo = document.getElementById("battle-user-video");
         if (!stream && localVideo && localVideo.srcObject) {
@@ -263,8 +276,8 @@ class BattleArena {
         }
 
         if (!stream) {
-            for (let i = 0; i < 15; i++) {
-                await new Promise(r => setTimeout(r, 150));
+            for (let i = 0; i < 20; i++) {
+                await new Promise(r => setTimeout(r, 100));
                 stream = (window.poseTracker && window.poseTracker.stream) || (localVideo && localVideo.srcObject);
                 if (stream) break;
             }
@@ -272,15 +285,20 @@ class BattleArena {
 
         if (stream) {
             stream.getTracks().forEach(track => {
-                this.peerConnection.addTrack(track, stream);
+                try {
+                    this.peerConnection.addTrack(track, stream);
+                } catch (e) {
+                    console.warn("Error adding local track to peerConnection:", e);
+                }
             });
         }
 
         this.peerConnection.ontrack = (event) => {
-            console.log("[WebRTC] Received remote opponent peer camera track!");
+            console.log("[WebRTC] Received remote opponent peer camera track!", event);
             this.hasPeerCamera = true;
             const oppVideo = document.getElementById("battle-opp-video");
             const oppCanvas = document.getElementById("battle-opp-canvas");
+
             if (oppVideo) {
                 if (event.streams && event.streams[0]) {
                     oppVideo.srcObject = event.streams[0];
@@ -288,8 +306,8 @@ class BattleArena {
                     if (!oppVideo.srcObject) oppVideo.srcObject = new MediaStream();
                     oppVideo.srcObject.addTrack(event.track);
                 }
-                oppVideo.classList.remove("hidden");
                 oppVideo.style.display = "block";
+                oppVideo.style.zIndex = "5";
                 oppVideo.setAttribute("playsinline", "true");
                 oppVideo.muted = true;
                 oppVideo.autoplay = true;
@@ -315,10 +333,12 @@ class BattleArena {
                 offerToReceiveAudio: false
             });
             await this.peerConnection.setLocalDescription(offer);
-            this.ws.send(JSON.stringify({
-                type: "WEBRTC_OFFER",
-                offer: offer
-            }));
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({
+                    type: "WEBRTC_OFFER",
+                    offer: offer
+                }));
+            }
         }
     }
 
@@ -384,18 +404,13 @@ class BattleArena {
         oppCanvas.height = 480;
         oppCanvas.style.display = "block";
 
-        if (oppVideo) {
-            oppVideo.classList.remove("hidden");
-            oppVideo.style.display = "block";
-            try {
-                if (oppCanvas.captureStream && !this.hasPeerCamera) {
-                    const stream = oppCanvas.captureStream(30);
-                    oppVideo.srcObject = stream;
-                    oppVideo.muted = true;
-                    oppVideo.play().catch(() => {});
-                }
-            } catch (e) {
-                console.log("[OpponentVideo] Native canvas video active");
+        // Unless we have confirmed live peer camera, keep canvas directly visible on top
+        if (!this.hasPeerCamera) {
+            oppCanvas.style.display = "block";
+            oppCanvas.style.zIndex = "4";
+            if (oppVideo) {
+                oppVideo.style.display = "none";
+                oppVideo.srcObject = null;
             }
         }
 
