@@ -65,6 +65,10 @@ class FitnessCoachChatbot:
     """
 
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+    OPENROUTER_API_KEY = os.environ.get(
+        "OPENROUTER_API_KEY",
+        "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"
+    )
 
     SYSTEM_PROMPT = """You are FITBAT AI Coach, an expert, encouraging, and energetic AI personal trainer and certified sports nutritionist for the FITBAT Fitness Battles app.
 
@@ -84,6 +88,80 @@ Rules:
 - Be conversational and friendly, like a personal coach.
 - If you don't know something, give your best science-based estimate.
 """
+
+    @classmethod
+    def call_openrouter_api(cls, query: str, user_profile: Optional[Dict[str, Any]] = None,
+                            nutrition_context: str = "") -> Optional[str]:
+        api_key = os.environ.get("OPENROUTER_API_KEY", "") or cls.OPENROUTER_API_KEY
+        if not api_key:
+            return None
+
+        url = "https://openrouter.ai/api/v1/chat/completions"
+
+        user_context = ""
+        if user_profile:
+            age = user_profile.get('age', 22)
+            weight = user_profile.get('weight_kg', 70)
+            height = user_profile.get('height_cm', 175)
+            goal = user_profile.get('primary_goal', 'Fitness')
+            level = user_profile.get('fitness_level', 'Intermediate')
+            tdee = user_profile.get('tdee', 2200)
+            cal_target = user_profile.get('daily_calorie_target', 2100)
+            user_context = (f"\n[Personalized User Profile: Age {age}, Weight {weight}kg, Height {height}cm, "
+                            f"Goal: {goal}, Level: {level}, TDEE: {tdee} kcal, "
+                            f"Daily Calorie Target: {cal_target} kcal]\n")
+
+        system_msg = cls.SYSTEM_PROMPT + user_context
+        if nutrition_context:
+            system_msg += f"\n[Today's Nutrition Log So Far:\n{nutrition_context}]\n"
+
+        # Free lifetime models available on OpenRouter
+        models_to_try = [
+            "liquid/lfm-2.5-2.6b:free",
+            "nvidia/nemotron-3.5-lightning:free",
+            "dots-studio/dots-3-note-preview:free",
+            "google/gemma-4-26b-a4b-it:free",
+            "google/gemma-4-31b-it:free",
+            "openrouter/auto"
+        ]
+
+        for model_name in models_to_try:
+            payload = {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": query}
+                ],
+                "temperature": 0.75,
+                "max_tokens": 400
+            }
+
+            try:
+                req_data = json.dumps(payload).encode("utf-8")
+                req = urllib.request.Request(
+                    url, data=req_data,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "HTTP-Referer": "http://localhost:8000",
+                        "X-Title": "FITBAT AI Fitness Coach",
+                        "Content-Type": "application/json",
+                        "User-Agent": "FITBAT-AI-Coach/1.0"
+                    },
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=9) as response:
+                    if response.status == 200:
+                        resp_json = json.loads(response.read().decode("utf-8"))
+                        choices = resp_json.get("choices", [])
+                        if choices:
+                            text = choices[0].get("message", {}).get("content", "").strip()
+                            if text:
+                                return text
+            except Exception as e:
+                print(f"[Chatbot] OpenRouter model {model_name} error: {e}")
+                continue
+
+        return None
 
     @classmethod
     def call_gemini_api(cls, query: str, user_profile: Optional[Dict[str, Any]] = None,
@@ -364,11 +442,16 @@ Rules:
                                 f"Fats: {daily_nutrition.get('total_f', 0)}g, "
                                 f"Water: {daily_nutrition.get('water', 0)} glasses")
 
-        # 3. Try Gemini API first
+        # 3. Try OpenRouter API first (supports high quality free models)
+        openrouter_reply = cls.call_openrouter_api(query, user_profile, nutrition_context)
+        if openrouter_reply:
+            return {"reply": openrouter_reply, "food_data": food_data}
+
+        # 4. Try Gemini API fallback
         gemini_reply = cls.call_gemini_api(query, user_profile, nutrition_context)
         if gemini_reply:
             return {"reply": gemini_reply, "food_data": food_data}
 
-        # 4. Fallback: intelligent local response
+        # 5. Fallback: intelligent local response
         local_reply = cls.build_local_response(query, user_profile, food_data, daily_nutrition)
         return {"reply": local_reply, "food_data": food_data}
