@@ -78,11 +78,24 @@ class StravaTracker {
                 attributionControl: false
             }).setView([defaultLat, defaultLng], 14);
 
-            // High-contrast Dark Matter Map Tiles for hardcore gym vibe
-            L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+            // Free dark matter map tiles (100% public, no API key required)
+            const primaryLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
                 maxZoom: 19,
-                subdomains: "abcd"
-            }).addTo(this.map);
+                subdomains: "abcd",
+                errorTileUrl: "https://tile.openstreetmap.org/1/0/0.png"
+            });
+            
+            // Auto fallback to OpenStreetMap if primary tiles fail or are blocked
+            primaryLayer.on("tileerror", (error, tile) => {
+                if (!this._hasFallbackTile) {
+                    this._hasFallbackTile = true;
+                    console.log("[StravaTracker] Switching to fallback OpenStreetMap tiles...");
+                    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                        maxZoom: 19
+                    }).addTo(this.map);
+                }
+            });
+            primaryLayer.addTo(this.map);
 
             // Glowing Crimson Route Polyline
             this.routePolyline = L.polyline([], {

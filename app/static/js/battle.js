@@ -305,7 +305,7 @@ class BattleArena {
                     oppVideo.srcObject.addTrack(event.track);
                 }
                 oppVideo.style.display = "block";
-                oppVideo.style.zIndex = "10";
+                oppVideo.style.zIndex = "5";
                 oppVideo.setAttribute("playsinline", "true");
                 oppVideo.muted = true;
                 oppVideo.autoplay = true;
@@ -421,9 +421,9 @@ class BattleArena {
         }
 
         // If peer camera is already active, ensure video element is shown
-        if (this.hasPeerCamera && oppVideo && oppVideo.srcObject) {
+        if (this.hasPeerCamera) {
             oppVideo.style.display = "block";
-            oppVideo.style.zIndex = "10";
+            oppVideo.style.zIndex = "5";
             oppCanvas.style.display = "none";
             return;
         }

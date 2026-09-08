@@ -467,11 +467,17 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(15, 23, 42, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     padding: 0.5rem 0.9rem;
     border-radius: 12px;
-    z-index: 10;
-    backdrop-filter: blur(4px);
+    z-index: 100 !important;
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+}
+
+.fighter-hud * {
+    pointer-events: auto;
 }
 
 .rep-display-huge {
