@@ -503,9 +503,14 @@
 
         <!-- VIEW 6: LEADERBOARDS -->
         <section id="view-leaderboard" class="app-view">
-            <div style="margin-bottom: 1.5rem;">
-                <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">🏆 Arena Leaderboards</h1>
-                <p style="color: var(--text-secondary);">Check the highest scoring fitness champions globally and in each discipline.</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h1 style="font-family: var(--font-heading); font-size: 2rem; color: var(--text-primary);">🏆 Arena Leaderboards</h1>
+                    <p style="color: var(--text-secondary);">Live fitness rankings updated across all multiplayer battles and workouts.</p>
+                </div>
+                <button class="btn-primary" id="btn-refresh-leaderboard" style="padding: 0.5rem 1.1rem; font-size: 0.9rem;" onclick="window.app.loadLeaderboards(true)">
+                    🔄 Refresh Leaderboards
+                </button>
             </div>
 
             <div class="glass-card" style="margin-bottom: 2rem;">

@@ -715,15 +715,36 @@ class FitbatApp {
         }
     }
 
-    async loadLeaderboards() {
-        this.loadGlobalLeaderboard();
+    async loadLeaderboards(manual = false) {
+        const btn = document.getElementById("btn-refresh-leaderboard");
+        if (btn && manual) {
+            btn.innerHTML = "⏳ Refreshing...";
+            btn.style.opacity = "0.7";
+        }
+
+        const sel = document.getElementById("exercise-leaderboard-select");
+        const currentExercise = (sel && sel.value) ? sel.value : this.selectedExercise;
+
+        await Promise.all([
+            this.loadGlobalLeaderboard(),
+            this.loadExerciseLeaderboard(currentExercise)
+        ]);
         this.renderExerciseLeaderboardSelect();
-        this.loadExerciseLeaderboard(this.selectedExercise);
+
+        if (btn && manual) {
+            setTimeout(() => {
+                btn.innerHTML = "✅ Updated!";
+                setTimeout(() => {
+                    btn.innerHTML = "🔄 Refresh Leaderboards";
+                    btn.style.opacity = "1";
+                }, 1000);
+            }, 300);
+        }
     }
 
     async loadGlobalLeaderboard() {
         try {
-            const res = await fetch("/api/leaderboard/global");
+            const res = await fetch(`/api/leaderboard/global?t=${Date.now()}`);
             const data = await res.json();
             const tbody = document.getElementById("global-leaderboard-tbody");
             if (!tbody) return;
@@ -768,7 +789,7 @@ class FitbatApp {
 
     async loadExerciseLeaderboard(exerciseId) {
         try {
-            const res = await fetch(`/api/leaderboard/exercise/${exerciseId}`);
+            const res = await fetch(`/api/leaderboard/exercise/${exerciseId}?t=${Date.now()}`);
             const data = await res.json();
             const tbody = document.getElementById("exercise-leaderboard-tbody");
             if (!tbody) return;

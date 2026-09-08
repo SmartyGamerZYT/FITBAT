@@ -1491,6 +1491,10 @@ body {
     background: #090a10;
 }
 
+.osm-dark-tiles {
+    filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+}
+
 .strava-map-overlay-badge {
     position: absolute;
     top: 14px;
