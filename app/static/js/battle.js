@@ -262,13 +262,6 @@ class BattleArena {
         this.peerConnection = new RTCPeerConnection(config);
         this.pendingIceCandidates = [];
 
-        // Ensure transceiver is set so video can be received even if camera is starting
-        try {
-            this.peerConnection.addTransceiver('video', { direction: 'sendrecv' });
-        } catch (e) {
-            console.warn("addTransceiver error:", e);
-        }
-
         // Obtain local camera stream
         let stream = (window.poseTracker && window.poseTracker.stream);
         const localVideo = document.getElementById("battle-user-video");
@@ -277,7 +270,7 @@ class BattleArena {
         }
 
         if (!stream) {
-            for (let i = 0; i < 20; i++) {
+            for (let i = 0; i < 15; i++) {
                 await new Promise(r => setTimeout(r, 100));
                 stream = (window.poseTracker && window.poseTracker.stream) || (localVideo && localVideo.srcObject);
                 if (stream) break;
@@ -308,7 +301,7 @@ class BattleArena {
                     oppVideo.srcObject.addTrack(event.track);
                 }
                 oppVideo.style.display = "block";
-                oppVideo.style.zIndex = "5";
+                oppVideo.style.zIndex = "10";
                 oppVideo.setAttribute("playsinline", "true");
                 oppVideo.muted = true;
                 oppVideo.autoplay = true;
@@ -348,7 +341,18 @@ class BattleArena {
     }
 
     async handleWebRTCOffer(offer) {
-        if (!this.peerConnection) await this.initWebRTCPeerConnection();
+        if (!this.peerConnection) await this.initWebRTCPeerConnection(false);
+
+        // Make sure local tracks are added if not yet added
+        let stream = (window.poseTracker && window.poseTracker.stream);
+        const localVideo = document.getElementById("battle-user-video");
+        if (!stream && localVideo && localVideo.srcObject) stream = localVideo.srcObject;
+        if (stream && this.peerConnection.getSenders().length === 0) {
+            stream.getTracks().forEach(track => {
+                try { this.peerConnection.addTrack(track, stream); } catch (e) {}
+            });
+        }
+
         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
         if (this.pendingIceCandidates) {
             for (const c of this.pendingIceCandidates) {
@@ -356,12 +360,17 @@ class BattleArena {
             }
             this.pendingIceCandidates = [];
         }
-        const answer = await this.peerConnection.createAnswer();
+        const answer = await this.peerConnection.createAnswer({
+            offerToReceiveVideo: true,
+            offerToReceiveAudio: false
+        });
         await this.peerConnection.setLocalDescription(answer);
-        this.ws.send(JSON.stringify({
-            type: "WEBRTC_ANSWER",
-            answer: answer
-        }));
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify({
+                type: "WEBRTC_ANSWER",
+                answer: answer
+            }));
+        }
     }
 
     async handleWebRTCAnswer(answer) {
@@ -404,26 +413,25 @@ class BattleArena {
             this.oppAnimId = null;
         }
 
+        // If peer camera is already active, ensure video element is shown
+        if (this.hasPeerCamera && oppVideo && oppVideo.srcObject) {
+            oppVideo.style.display = "block";
+            oppVideo.style.zIndex = "10";
+            oppCanvas.style.display = "none";
+            return;
+        }
+
         const ctx = oppCanvas.getContext("2d");
         oppCanvas.width = 640;
         oppCanvas.height = 480;
         oppCanvas.style.display = "block";
-
-        // Unless we have confirmed live peer camera, keep canvas directly visible on top
-        if (!this.hasPeerCamera) {
-            oppCanvas.style.display = "block";
-            oppCanvas.style.zIndex = "4";
-            if (oppVideo) {
-                oppVideo.style.display = "none";
-                oppVideo.srcObject = null;
-            }
-        }
+        oppCanvas.style.zIndex = "4";
 
         let frame = 0;
         this.oppRepBurst = 0;
 
         const render = () => {
-            if (!this.isBattleActive) return;
+            if (!this.isBattleActive || this.hasPeerCamera) return;
             frame++;
             if (this.oppRepBurst > 0) this.oppRepBurst -= 0.035;
 

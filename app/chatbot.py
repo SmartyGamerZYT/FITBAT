@@ -58,17 +58,31 @@ FOOD_CALORIES_DB = {
 }
 
 
+def _load_env_secret(key_name: str) -> str:
+    val = os.environ.get(key_name, "")
+    if val:
+        return val
+    # Fallback to loading from .env if present
+    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith(f"{key_name}="):
+                        return line.strip().split("=", 1)[1]
+        except Exception:
+            pass
+    return ""
+
+
 class FitnessCoachChatbot:
     """
-    FITBAT AI Fitness Coach powered by Google Gemini API
+    FITBAT AI Fitness Coach powered by Google Gemini / OpenRouter API
     with Daily Health Monitor, calorie tracking, and sports knowledge.
     """
 
-    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-    OPENROUTER_API_KEY = os.environ.get(
-        "OPENROUTER_API_KEY",
-        "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"
-    )
+    GEMINI_API_KEY = _load_env_secret("GEMINI_API_KEY")
+    OPENROUTER_API_KEY = _load_env_secret("OPENROUTER_API_KEY")
 
     SYSTEM_PROMPT = """You are FITBAT AI Coach, an expert, encouraging, and energetic AI personal trainer and certified sports nutritionist for the FITBAT Fitness Battles app.
 
