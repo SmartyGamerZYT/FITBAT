@@ -197,7 +197,7 @@ class BattleArena {
                 this.startOpponentVideoStream(this.currentExercise, this.opponentName);
 
                 if (!data.opponent.is_ai) {
-                    await this.initWebRTCPeerConnection();
+                    await this.initWebRTCPeerConnection(this.isInitiator);
                 }
                 break;
 
@@ -249,8 +249,9 @@ class BattleArena {
         alert(`Arena ID ${code} copied to clipboard! Send this code to your friend.`);
     }
 
-    async initWebRTCPeerConnection() {
+    async initWebRTCPeerConnection(isInitiator = false) {
         if (this.peerConnection) return;
+        this.isInitiator = isInitiator;
         const config = {
             iceServers: [
                 { urls: "stun:stun.l.google.com:19302" },
@@ -328,16 +329,20 @@ class BattleArena {
         };
 
         if (this.isInitiator) {
-            const offer = await this.peerConnection.createOffer({
-                offerToReceiveVideo: true,
-                offerToReceiveAudio: false
-            });
-            await this.peerConnection.setLocalDescription(offer);
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({
-                    type: "WEBRTC_OFFER",
-                    offer: offer
-                }));
+            try {
+                const offer = await this.peerConnection.createOffer({
+                    offerToReceiveVideo: true,
+                    offerToReceiveAudio: false
+                });
+                await this.peerConnection.setLocalDescription(offer);
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({
+                        type: "WEBRTC_OFFER",
+                        offer: offer
+                    }));
+                }
+            } catch (err) {
+                console.warn("[WebRTC] Error creating offer:", err);
             }
         }
     }
@@ -827,7 +832,11 @@ class BattleArena {
         }
 
         const modal = document.getElementById("battle-result-modal");
-        document.getElementById("result-outcome-title").textContent = resultData.outcome;
+        let outcomeTitle = resultData.outcome;
+        if (resultData.surrender && isVictory) {
+            outcomeTitle = "VICTORY (RIVAL SURRENDERED)!";
+        }
+        document.getElementById("result-outcome-title").textContent = outcomeTitle;
         document.getElementById("result-outcome-title").style.color = isVictory ? "var(--emerald)" : "var(--coral)";
         document.getElementById("result-user-reps").textContent = resultData.user_reps;
         document.getElementById("result-opp-reps").textContent = resultData.opponent_reps;
@@ -861,9 +870,16 @@ class BattleArena {
     }
 
     exitBattle() {
+        // Notify server that user is surrendering/exiting so the opponent finishes the match too
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            try {
+                this.ws.send(JSON.stringify({ type: "FINISH_ROUND", surrender: true }));
+            } catch (e) {}
+        }
         this.cleanupSession();
         this.hideMatchmakingModal();
-        document.getElementById("battle-result-modal").classList.remove("open");
+        const resModal = document.getElementById("battle-result-modal");
+        if (resModal) resModal.classList.remove("open");
         if (window.app) window.app.showView("dashboard");
     }
 

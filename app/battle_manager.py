@@ -426,7 +426,14 @@ class BattleManager:
             if len(player_list) >= 2:
                 p1, p2 = player_list[0], player_list[1]
                 for p_curr, p_opp in [(p1, p2), (p2, p1)]:
-                    if p_curr["reps"] > p_opp["reps"]:
+                    # If triggering_ws surrendered or disconnected
+                    if triggering_ws and p_curr["ws"] == triggering_ws:
+                        outcome = "DEFEAT"
+                        xp = 30
+                    elif triggering_ws and p_opp["ws"] == triggering_ws:
+                        outcome = "VICTORY"
+                        xp = 250 + (p_curr["reps"] * 5)
+                    elif p_curr["reps"] > p_opp["reps"]:
                         outcome = "VICTORY"
                         xp = 200 + (p_curr["reps"] * 5)
                     elif p_curr["reps"] < p_opp["reps"]:
@@ -454,7 +461,8 @@ class BattleManager:
                             "outcome": outcome,
                             "user_reps": p_curr["reps"],
                             "opponent_reps": p_opp["reps"],
-                            "xp_earned": xp
+                            "xp_earned": xp,
+                            "surrender": (triggering_ws is not None)
                         })
                     except Exception:
                         pass
